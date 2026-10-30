@@ -89,7 +89,11 @@ self.addEventListener('fetch', function (ev) {
           }
           return rep;
         }).catch(function () {
-          return hit || caches.match('./index.html');
+          if (hit) return hit;
+          // Replier sur l'accueil seulement pour une navigation : sinon un
+          // agent hors ligne recevrait l'app publique à l'URL de gestion.
+          if (req.mode === 'navigate') return caches.match('./index.html');
+          return Response.error();
         });
         return hit || reseau;
       })

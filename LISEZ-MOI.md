@@ -25,21 +25,58 @@ commandes.
 
 Sans cet interrupteur, aucune commande ne peut être créée.
 
-### 2. Te nommer administrateur
+### 2. Créer ton compte d'équipe
 
-Une fois l'app ouverte une première fois sur ton téléphone, va dans
-**SQL Editor** et exécute :
+L'écran de gestion (`gestion.html`) demande un vrai compte, pas une session
+anonyme. Deux étapes, une fois pour toutes.
+
+**a.** Dans Supabase : **Authentication → Users → Add user → Create new user**.
+Mets ton adresse e-mail et un mot de passe, et coche *Auto Confirm User*.
+
+**b.** Dans **SQL Editor**, donne-toi le rôle :
 
 ```sql
--- Remplace par ton adresse si tu crées un compte par e-mail,
--- ou prends le compte le plus récent si tu es passé par l'app.
 update profiles set role = 'admin'
- where id = (select id from auth.users order by created_at desc limit 1);
+ where id = (select id from auth.users where email = 'ton.adresse@exemple.com');
 ```
 
+Pour ajouter un agent plus tard, refais exactement ces deux étapes avec
+`'agent'` au lieu de `'admin'`.
+
 Pourquoi c'est nécessaire : seul un compte `agent` ou `admin` peut publier un
-produit. C'est volontaire — la qualité des photos décide des ventes, et un
-vendeur laissé seul avec son téléphone publie des fiches illisibles.
+produit, vérifier une boutique ou valider un retrait. C'est volontaire — la
+qualité des photos décide des ventes, et un vendeur laissé seul avec son
+téléphone publie des fiches illisibles.
+
+---
+
+## L'écran de gestion
+
+Adresse : `gestion.html` à côté de l'app publique. Pensé pour un agent debout,
+un téléphone dans une main. Trois onglets, dans l'ordre où l'on travaille.
+
+**Comptoir** — les commandes qui attendent un geste, les plus anciennes
+d'abord. Pour chacune, le numéro du client bien visible, et une seule action
+possible selon l'étape : confirmer l'appel téléphonique, marquer le colis
+arrivé, encaisser et remettre contre le code, ou annuler. Un client qui a déjà
+des abandons à son compteur est signalé en rouge.
+
+**Catalogue** — choisir la boutique, créer un produit, ajouter ses variantes et
+leur stock, prendre les photos directement avec l'appareil du téléphone, puis
+publier. Un produit naît toujours en brouillon.
+
+**Boutiques** — créer un vendeur, le vérifier après contrôle de sa patente et
+de sa pièce d'identité, fixer son plan d'abonnement.
+
+### Deux refus volontaires
+
+**Publier exige au moins une photo et du stock.** Le bouton refuse sinon. Une
+fiche vide ne se vend pas et abîme la confiance dans toute la plateforme, pas
+seulement dans ce produit.
+
+**Annuler demande deux appuis.** L'annulation remet les articles en stock et
+compte un abandon au client, ce qui le rapproche du prépaiement obligatoire.
+Trop lourd de conséquences pour un seul appui sur un téléphone tenu à une main.
 
 ---
 
@@ -59,14 +96,20 @@ hors-ligne fonctionnent. GitHub Pages le fournit.
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | Styles et squelette des écrans |
-| `app.js` | Interface, navigation, panier, libellés FR/créole |
+| `index.html` | App publique : styles et squelette des écrans |
+| `app.js` | Interface acheteur, navigation, panier, libellés FR/créole |
 | `api.js` | Tout l'accès aux données. **Ce fichier part tel quel dans l'app mobile** |
 | `config.js` | Clés Supabase, taux, phase, règles. Le seul à modifier d'habitude |
 | `payments.js` | Moyens de paiement. Un moyen = une entrée |
+| `gestion.html` | Écran de l'équipe : styles et squelette |
+| `gestion.js` | Comptoir, catalogue, boutiques |
+| `admin.js` | Fonctions réservées à l'équipe. **Chargé seulement par `gestion.html`** |
 | `sw.js` | Cache hors-ligne et installation sur l'écran d'accueil |
 | `manifest.webmanifest` | Nom, icônes, couleurs de l'app installée |
 | `icon*.png`, `icon.svg` | Icônes |
+
+`admin.js` est séparé exprès : un acheteur ne télécharge pas le code de
+gestion. La data mobile coûte cher et il n'a rien à y faire.
 
 ---
 
@@ -118,16 +161,19 @@ et le parcours. À ne faire qu'une fois la société enregistrée.
 
 ## Ce qui n'est pas encore là
 
-- **Le back-office de publication.** Aucun produit ne peut encore être ajouté
-  depuis l'app : c'est la prochaine étape, et sans elle le catalogue reste
-  vide.
-- **L'espace vendeur.** Les fonctions de lecture existent dans `api.js`,
-  l'écran reste à faire.
-- **Le comptoir agent** : vérifier un code de retrait, encaisser, marquer la
-  commande retirée.
-- **Les litiges.** La table existe. Le bouton n'existera que quand les règles
-  seront tranchées : qui arbitre, sous quel délai, avec quel plafond
-  d'indemnisation.
+- **L'espace vendeur.** Le vendeur ne voit pas encore ses propres ventes ni
+  son solde depuis l'app. Les fonctions de lecture existent dans `api.js`,
+  l'écran reste à faire. En attendant, l'équipe lui transmet ses commandes.
+- **Le transfert d'une boutique à son vendeur.** Les boutiques sont créées au
+  nom de l'agent. Quand un vendeur aura son propre compte, il faudra pouvoir
+  lui passer la propriété.
+- **Les litiges.** La table existe et un abandon y laisse une trace. Le bouton
+  « ouvrir un litige » côté acheteur n'existera que quand les règles seront
+  tranchées : qui arbitre, sous quel délai, avec quel plafond d'indemnisation.
+  Un bouton qui promet un arbitrage inexistant est pire que pas de bouton.
+- **Les relances automatiques.** Personne ne prévient le client que son colis
+  est arrivé ni que son délai court. Pour l'instant c'est l'appel de l'agent
+  qui fait ce travail, ce qui tient à l'échelle du pilote, pas au-delà.
 
 ---
 

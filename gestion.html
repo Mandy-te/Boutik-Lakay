@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestion — Boutique Lakay</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<style>
+/* Layout : outil de terrain. Un agent debout, un téléphone dans une main.
+   Cibles tactiles larges, une colonne, l'action la plus fréquente en haut. */
+:root{
+  --bg:#F6F5F2; --surface:#FFFFFF; --ink:#14161C; --ink-soft:#5B6070; --line:#E3E2DC;
+  --brand:#1B2FA0; --brand-ink:#FFFFFF; --brand-soft:#E8EAFA;
+  --hot:#C8102E; --ok:#1A7F4B; --warn:#8A5A00; --warn-soft:#FBF0DC;
+  --display:'Archivo Black','Arial Black',Impact,sans-serif;
+  --body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1016; --surface:#171A22; --ink:#F2F2F0; --ink-soft:#9AA0B0; --line:#272B36;
+    --brand:#7C8CF8; --brand-ink:#0E1016; --brand-soft:#1C2140;
+    --hot:#FF6B7A; --ok:#46C084; --warn:#E0A94A; --warn-soft:#2A2113;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1016; --surface:#171A22; --ink:#F2F2F0; --ink-soft:#9AA0B0; --line:#272B36;
+  --brand:#7C8CF8; --brand-ink:#0E1016; --brand-soft:#1C2140;
+  --hot:#FF6B7A; --ok:#46C084; --warn:#E0A94A; --warn-soft:#2A2113;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+img{max-width:100%}
+[hidden]{display:none!important}
+.wrap{max-width:720px;margin-inline:auto;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.hbar{display:flex;align-items:center;gap:10px;padding-block:11px}
+.mark{font-family:var(--display);font-size:17px;letter-spacing:-.03em}
+.tag{font-size:10px;font-weight:700;letter-spacing:.09em;padding:3px 7px;border-radius:4px;background:var(--ink);color:var(--bg)}
+.spacer{flex:1}
+.lien{background:none;border:0;padding:6px 0;font-size:12.5px;font-weight:600;color:var(--ink-soft);text-decoration:underline}
+
+.onglets{display:flex;gap:8px;overflow-x:auto;padding-block:10px;scrollbar-width:none}
+.onglets::-webkit-scrollbar{display:none}
+.ong{white-space:nowrap;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--ink-soft)}
+.ong[aria-selected="true"]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+
+.pile{display:flex;flex-direction:column;gap:12px;padding-block:8px 28px}
+.bloc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:11px;min-width:0}
+.titreligne{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.titreligne h2{font-size:15px}
+.sechead{display:flex;align-items:baseline;gap:9px;padding-block:16px 2px}
+.sechead h2{font-size:16px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.note{font-size:12.5px;color:var(--ink-soft)}
+.empty{text-align:center;padding:40px 0;color:var(--ink-soft);font-size:14px}
+
+.champ{display:flex;flex-direction:column;gap:5px}
+.champ label{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+.champ input,.champ select,.champ textarea{
+  border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:12px 13px;width:100%}
+.champ textarea{min-height:72px;resize:vertical}
+.duo{display:flex;gap:10px;flex-wrap:wrap}
+.duo>*{flex:1;min-width:130px}
+.coche{display:flex;align-items:center;gap:9px;font-size:13.5px}
+.coche input{width:20px;height:20px;flex:none}
+
+.cta{width:100%;background:var(--brand);color:var(--brand-ink);border:0;border-radius:11px;padding:14px;font-size:15px;font-weight:700}
+.cta[disabled]{opacity:.45}
+.cta.vert{background:var(--ok);color:#fff}
+.cta.rouge{background:var(--hot);color:#fff}
+.ghost{width:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:11px;padding:12px;font-size:14px;font-weight:600}
+.mini{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:600;flex:none}
+.rangee{display:flex;gap:8px;flex-wrap:wrap}
+
+.pill{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:999px;white-space:nowrap;flex:none}
+.pill.att{background:var(--brand-soft);color:var(--brand)}
+.pill.ok{background:color-mix(in srgb, var(--ok) 16%, transparent);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ko{background:color-mix(in srgb, var(--hot) 14%, transparent);color:var(--hot)}
+.pill.gris{background:var(--line);color:var(--ink-soft)}
+
+.oref{font-size:12.5px;font-weight:700;letter-spacing:.03em;color:var(--ink-soft)}
+.ligne{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink-soft)}
+.ligne strong{color:var(--ink);font-weight:600}
+.tel{font-size:15px;font-weight:700;letter-spacing:.02em}
+.vignettes{display:flex;gap:7px;flex-wrap:wrap}
+.vignette{width:58px;height:58px;border-radius:8px;object-fit:cover;border:1px solid var(--line)}
+.retard{background:var(--warn-soft);border-radius:10px;padding:10px 12px;font-size:12.5px}
+.erreur{background:color-mix(in srgb, var(--hot) 12%, transparent);border-radius:10px;padding:11px 12px;font-size:13px}
+.succes{background:color-mix(in srgb, var(--ok) 14%, transparent);border-radius:10px;padding:11px 12px;font-size:13px}
+.codein{text-align:center;font-family:var(--display);font-size:26px;letter-spacing:.2em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <span class="mark">Boutique Lakay</span>
+    <span class="tag">GESTION</span>
+    <span class="spacer"></span>
+    <button class="lien" id="sortir" hidden>Déconnexion</button>
+  </div>
+</header>
+
+<main>
+  <!-- Connexion -->
+  <section id="vue-login" class="wrap">
+    <div class="sechead"><h2>Connexion équipe</h2></div>
+    <p class="note">Réservé aux agents et aux administrateurs de Boutique Lakay.</p>
+    <div class="pile">
+      <div class="bloc">
+        <div class="champ"><label for="email">Adresse e-mail</label>
+          <input id="email" type="email" autocomplete="username" inputmode="email"></div>
+        <div class="champ"><label for="mdp">Mot de passe</label>
+          <input id="mdp" type="password" autocomplete="current-password"></div>
+        <div id="loginErr"></div>
+        <button class="cta" id="entrer">Entrer</button>
+      </div>
+      <p class="note">Si tu n'as pas encore de compte, crée-le dans Supabase
+        (Authentication → Users → Add user), puis donne-lui le rôle agent ou
+        admin. La marche à suivre est dans le fichier LISEZ-MOI.</p>
+    </div>
+  </section>
+
+  <!-- Refus -->
+  <section id="vue-refus" class="wrap" hidden>
+    <div class="sechead"><h2>Accès refusé</h2></div>
+    <div class="pile"><div class="bloc">
+      <p class="note" id="refusTxt"></p>
+      <button class="ghost" id="refusSortir">Se déconnecter</button>
+    </div></div>
+  </section>
+
+  <!-- Espace équipe -->
+  <section id="vue-app" class="wrap" hidden>
+    <div class="onglets" role="tablist">
+      <button class="ong" role="tab" data-ong="comptoir" aria-selected="true">Comptoir</button>
+      <button class="ong" role="tab" data-ong="catalogue" aria-selected="false">Catalogue</button>
+      <button class="ong" role="tab" data-ong="boutiques" aria-selected="false">Boutiques</button>
+    </div>
+    <div id="panneau"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="admin.js"></script>
+<script src="gestion.js"></script>
+</body>
+</html>
