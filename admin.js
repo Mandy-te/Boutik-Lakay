@@ -88,7 +88,8 @@ function blocVariantes(p) {
       : '<p class="note">Aucune variante.</p>') +
     (noms.length ? '' :
       '<div class="vrow">' +
-        '<div class="champ lib"><label for="nv-stock-' + esc(p.id) + '">Quantité en stock</label>' +
+        '<div class="champ lib"><label for="nv-stock-' + esc(p.id) + '">' +
+          (vs.length ? 'Ajouter une autre variante' : 'Quantité en stock') + '</label>' +
           '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
         '<button class="mini" data-ajsimple="' + esc(p.id) + '">Enregistrer</button>' +
       '</div>');
@@ -574,9 +575,16 @@ document.addEventListener('click', async function (ev) {
   /* --- Catalogue : variantes --- */
   if (c.hasAttribute('data-ajsimple')) {
     const id = c.getAttribute('data-ajsimple');
+    const p = produits.filter(function (x) { return x.id === id; })[0] ||
+              aRevisers.filter(function (x) { return x.id === id; })[0];
+    const n = ((p && p.variantes) || []).length;
+    const nom = n ? 'Lot ' + (n + 1) : 'Standard';
     await agir(c, 'msg-' + id, function () {
-      return OPS.ajouterVariante(id, 'Standard', 0, val('nv-stock-' + id), {});
-    }, rechargerProduits);
+      return OPS.ajouterVariante(id, nom, 0, val('nv-stock-' + id), {});
+    }, async function () {
+      if (ongletActif === 'revision') await rendreRevision();
+      else await rechargerProduits();
+    });
     return;
   }
   if (c.hasAttribute('data-supvar')) {

@@ -184,8 +184,18 @@ function blocMedias(p) {
       }) + '<div class="progres" id="prog-' + esc(p.id) + '"></div>');
 }
 
+/* Ce qu'un vendeur peut toucher, et quand :
+
+   · le STOCK, toujours. C'est son métier, et une fiche en vitrine
+     dont il ne peut pas corriger le stock vend ce qu'il n'a plus.
+   · les DÉCLINAISONS et les variantes, sauf pendant la révision :
+     modifier une fiche qu'un agent est en train de relire lui ferait
+     valider autre chose que ce qu'il a sous les yeux.
+   · les PRIX, seulement tant que la fiche est en brouillon. Ensuite
+     ils passent par Boutique Lakay, comme la publication.          */
 function blocVariantes(p) {
-  const fige = p.statut === 'en_revision' || p.statut === 'publie';
+  const enRevision = p.statut === 'en_revision';
+  const prixFige = enRevision || p.statut === 'publie';
   const noms = Object.keys(p.declinaisons || {});
   const vs = (p.variantes || []).slice().sort(function (a, b) {
     return (a.libelle || '').localeCompare(b.libelle || '');
@@ -203,31 +213,39 @@ function blocVariantes(p) {
       '<div class="champ"><label>Prix (HTG)</label>' +
         '<input inputmode="decimal" value="' + esc(enGourdes(v.prix)) +
         '" placeholder="' + esc(enGourdes(p.prix)) + '" data-vprix="' + esc(v.id) +
-        '"' + (fige ? ' disabled' : '') + '></div>' +
-      (fige ? '' : '<button class="sup" data-supvar="' + esc(v.id) +
+        '"' + (prixFige ? ' disabled' : '') + '></div>' +
+      (enRevision ? '' : '<button class="sup" data-supvar="' + esc(v.id) +
         '" data-prod="' + esc(p.id) + '" aria-label="Supprimer">\u00d7</button>') +
     '</div>';
   }).join('');
 
-  const entete = vs.length
-    ? '<div class="sechead"><h2 style="font-size:13px">Stock par variante</h2></div>'
-    : '';
+  const stocks = (vs.length
+    ? '<div class="sechead"><h2 style="font-size:13px">Stock par variante</h2></div>' + lignes +
+      (prixFige ? '<p class="note">Les prix se modifient quand la fiche est en ' +
+        'brouillon, ou par Boutique Lakay.</p>' : '')
+    : '');
 
-  if (fige) {
-    return blocDeclinaisons(p, { fige: true }) + entete + lignes +
-      '<p class="note">Vous pouvez toujours ajuster vos stocks. Les prix et les ' +
-      'déclinaisons se modifient quand la fiche est en brouillon.</p>';
+  // Une fiche sans aucune variante ne peut rien vendre : il faut
+  // toujours un moyen d'en créer une, même en vitrine.
+  const saisie = enRevision ? '' :
+    (noms.length
+      ? ''   // le bouton « créer les combinaisons » est dans blocDeclinaisons
+      : '<div class="vrow">' +
+          '<div class="champ lib"><label for="nv-stock-' + esc(p.id) + '">' +
+            (vs.length ? 'Ajouter une autre variante' : 'Quantité en stock') + '</label>' +
+            '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
+          '<button class="mini" data-ajsimple="' + esc(p.id) + '">Enregistrer</button>' +
+        '</div>');
+
+  if (enRevision) {
+    return blocDeclinaisons(p, { fige: true }) + stocks +
+      '<p class="note">Fiche en révision : seuls vos stocks restent modifiables.</p>';
   }
 
-  return blocDeclinaisons(p, {}) + entete +
-    (lignes || '<p class="note">Aucune variante. Créez les combinaisons ci-dessus, ' +
-      'ou renseignez simplement une quantité si l\u2019article ne se décline pas.</p>') +
-    (noms.length ? '' :
-      '<div class="vrow">' +
-        '<div class="champ lib"><label for="nv-stock-' + esc(p.id) + '">Quantité en stock</label>' +
-          '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
-        '<button class="mini" data-ajsimple="' + esc(p.id) + '">Enregistrer</button>' +
-      '</div>');
+  return blocDeclinaisons(p, {}) + stocks +
+    (vs.length ? '' : '<p class="note">Aucune variante : cet article ne peut rien ' +
+      'vendre tant que vous n\u2019en créez pas une.</p>') +
+    saisie;
 }
 
 function formProduit(p) {
@@ -539,9 +557,14 @@ document.addEventListener('click', async function (ev) {
   // Article sans déclinaison : une seule variante, juste une quantité.
   if (c.hasAttribute('data-ajsimple')) {
     const id = c.getAttribute('data-ajsimple');
-    const stock = val('nv-stock-' + id);
+    const p = produits.filter(function (x) { return x.id === id; })[0];
+    const n = ((p && p.variantes) || []).length;
+    // Plusieurs variantes sans déclinaison auraient le même libellé :
+    // on les numérote pour que la base les accepte et qu'on les
+    // distingue à l'écran.
+    const nom = n ? 'Lot ' + (n + 1) : 'Standard';
     await agir(c, 'msg-' + id, function () {
-      return OPS.ajouterVariante(id, 'Standard', 0, stock, {});
+      return OPS.ajouterVariante(id, nom, 0, val('nv-stock-' + id), {});
     }, rechargerProduits);
     return;
   }
