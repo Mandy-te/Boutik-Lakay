@@ -90,6 +90,123 @@ const API = (function () {
     return s ? s.user.id : null;
   }
 
+  /* ---------- Comptes --------------------------------------
+     L'identifiant est le NUMÉRO DE TÉLÉPHONE, pas l'e-mail :
+     en Haïti tout le monde a un numéro, peu consultent une
+     boîte mail, et c'est déjà le numéro que l'agent appelle
+     pour confirmer la commande.
+
+     Techniquement Supabase authentifie par e-mail et mot de
+     passe. On fabrique donc un identifiant interne à partir
+     du numéro. L'acheteur ne le voit jamais : il saisit son
+     numéro et un code à 6 chiffres, comme pour MonCash.
+     Le jour où un envoi de SMS sera budgété, on passera au
+     vrai téléphone sans toucher à l'interface.              */
+
+  const DOMAINE_INTERNE = 'lakay.local';
+
+  // Garde les chiffres et impose l'indicatif haïtien.
+  function normaliserTel(tel) {
+    let n = String(tel || '').replace(/\D/g, '');
+    if (n.length === 8) n = '509' + n;          // numéro local
+    if (n.length === 11 && n.indexOf('509') === 0) return n;
+    if (n.length > 11 && n.indexOf('509') === 0) return n.slice(0, 11);
+    return n;
+  }
+
+  function telValide(tel) {
+    const n = normaliserTel(tel);
+    return n.length === 11 && n.indexOf('509') === 0;
+  }
+
+  function identifiantInterne(tel) {
+    return normaliserTel(tel) + '@' + DOMAINE_INTERNE;
+  }
+
+  // Session de passage : l'acheteur navigue sans compte.
+  async function estInvite() {
+    const { data } = await sb().auth.getSession();
+    if (!data || !data.session) return true;
+    const u = data.session.user;
+    return !!(u.is_anonymous || (u.email || '').indexOf('@' + DOMAINE_INTERNE) === -1 && !u.email);
+  }
+
+  /* Transforme la session de passage en vrai compte, SANS perdre
+     ce qui a déjà été fait : le panier, et surtout les commandes
+     déjà passées restent attachées au même identifiant. */
+  async function creerCompte(champs) {
+    if (!telValide(champs.tel)) {
+      throw new Error('Numéro invalide. Exemple : 3132 4336');
+    }
+    if (!champs.pin || String(champs.pin).length < 6) {
+      throw new Error('Le code secret doit avoir 6 chiffres.');
+    }
+    const ident = identifiantInterne(champs.tel);
+
+    await session();
+    const { data: s } = await sb().auth.getSession();
+    const anonyme = s && s.session && s.session.user.is_anonymous;
+
+    if (anonyme) {
+      const { error } = await sb().auth.updateUser({
+        email: ident, password: String(champs.pin)
+      });
+      if (error) {
+        if (String(error.message).toLowerCase().indexOf('already') !== -1) {
+          throw new Error('Ce numéro a déjà un compte. Connectez-vous.');
+        }
+        throw error;
+      }
+      // Si la confirmation d'e-mail est restée active côté Supabase, le
+      // changement reste en attente et le compte demeure de passage.
+      const { data: apres } = await sb().auth.getUser();
+      if (apres && apres.user && apres.user.is_anonymous) {
+        throw new Error('Le compte n’a pas pu être activé. ' +
+          'Désactivez « Confirm email » dans les réglages Supabase.');
+      }
+    } else {
+      const { error } = await sb().auth.signUp({
+        email: ident, password: String(champs.pin)
+      });
+      if (error) throw error;
+    }
+
+    await majProfil({
+      nom: champs.nom,
+      telephone: normaliserTel(champs.tel),
+      email_contact: champs.email || null,
+      langue: champs.langue || CONFIG.langueParDefaut
+    });
+    return true;
+  }
+
+  async function connecter(tel, pin) {
+    if (!telValide(tel)) throw new Error('Numéro invalide.');
+    const { error } = await sb().auth.signInWithPassword({
+      email: identifiantInterne(tel), password: String(pin)
+    });
+    if (error) {
+      throw new Error('Numéro ou code secret incorrect.');
+    }
+    return true;
+  }
+
+  async function deconnecter() {
+    await sb().auth.signOut();
+    try {
+      localStorage.removeItem('bl:panier');
+      localStorage.removeItem('bl:codes');
+    } catch (e) {}
+  }
+
+  /* Code de retrait perdu avec le téléphone : on en redemande un.
+     L'ancien cesse aussitôt de valoir. */
+  async function regenererCode(commandeId) {
+    const { data, error } = await sb().rpc('regenerer_code', { p_commande: commandeId });
+    if (error) throw error;
+    return data;
+  }
+
   async function profil() {
     const id = await monId();
     if (!id) return null;
@@ -293,6 +410,9 @@ const API = (function () {
   return {
     sb: sb, pret: pret,
     session: session, monId: monId, profil: profil, majProfil: majProfil,
+    normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
+    creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
+    regenererCode: regenererCode,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,
     prixVariante: prixVariante, fourchette: fourchette, medias: medias,

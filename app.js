@@ -48,6 +48,15 @@ const T = {
     from:'à partir de', video:'Vidéo de l\u2019article',
     tracking:'Numéro de suivi Flashipping', trackingLink:'Suivre chez Flashipping',
     yourEmail:'Adresse e-mail (facultatif)',
+    account:'Votre compte', pin:'Code secret (6 chiffres)',
+    pinWhy:'Il vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone, même si vous perdez celui-ci.',
+    haveAccount:'J\u2019ai déjà un compte', newAccount:'Créer un compte',
+    signIn:'Se connecter', signOut:'Se déconnecter',
+    needPin:'Choisissez un code secret de 6 chiffres.',
+    needTel:'Numéro invalide. Exemple : 3132 4336.',
+    connected:'Connecté', guest:'Compte de passage',
+    lostCode:'Code perdu ? En demander un nouveau',
+    newCodeDone:'Nouveau code. L\u2019ancien ne vaut plus rien.',
     emailWhy:'Pour être prévenu dès que votre colis est disponible au comptoir.',
     videoData:'La vidéo ne se télécharge que si vous appuyez sur lecture.'
   },
@@ -90,6 +99,15 @@ const T = {
     from:'apati de', video:'Videyo atik la',
     tracking:'Nimewo swivi Flashipping', trackingLink:'Swiv li lakay Flashipping',
     yourEmail:'Adrès imèl (si w vle)',
+    account:'Kont ou', pin:'Kòd sekrè (6 chif)',
+    pinWhy:'Li kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn, menm si w pèdi sa a.',
+    haveAccount:'Mwen gen yon kont deja', newAccount:'Kreye yon kont',
+    signIn:'Konekte', signOut:'Dekonekte',
+    needPin:'Chwazi yon kòd sekrè 6 chif.',
+    needTel:'Nimewo pa bon. Egzanp : 3132 4336.',
+    connected:'Konekte', guest:'Kont pasaj',
+    lostCode:'Ou pèdi kòd la ? Mande yon lòt',
+    newCodeDone:'Nouvo kòd. Ansyen an pa vo anyen ankò.',
     emailWhy:'Pou nou avèti w lè kolis ou disponib nan kontwa a.',
     videoData:'Videyo a ap chaje sèlman si w peze bouton lekti a.'
   }
@@ -113,6 +131,8 @@ let pointChoisi = null;
 let derniereCommande = null;
 let horsLigne = false, catalogueVieux = false;
 let envoiEnCours = false;
+let invite = true;        // session de passage tant qu'aucun compte n'est cree
+let modeConnexion = false; // le panier montre le formulaire de connexion
 
 /* ---------- Utilitaires ----------------------------------- */
 
@@ -417,20 +437,62 @@ async function rendrePanier() {
     '</div>';
   }).join('') + '</div>';
 
-  // Coordonnées : l'appel de confirmation avant expédition en dépend.
+  // Un compte est exigé pour commander. Pas pour naviguer : le mur à
+  // l'entrée fait fuir un premier acheteur qui ne connaît pas encore la
+  // plateforme. Mais sans compte, une commande ne vit que dans ce
+  // téléphone — perdu le téléphone, perdus l'historique et le code.
   const prof = await API.profil().catch(function () { return null; });
-  h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('yourName')) + '</h2></div>' +
-    '<div class="shoplist">' +
-      '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
-        '<input id="fNom" value="' + esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
-      '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
-        '<input id="fTel" type="tel" inputmode="tel" value="' + esc(prof ? prof.telephone : '') + '"></div>' +
-      '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
-        '<input id="fMail" type="email" inputmode="email" autocomplete="email" value="' +
-        esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
-    '</div>' +
-    '<p class="note">' + esc(t('phoneWhy')) + '</p>' +
-    '<p class="note" style="padding-top:0">' + esc(t('emailWhy')) + '</p>';
+  invite = await API.estInvite().catch(function () { return true; });
+
+  if (invite && modeConnexion) {
+    h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('signIn')) + '</h2></div>' +
+      '<div class="shoplist">' +
+        '<div class="champ"><label for="lTel">' + esc(t('yourPhone')) + '</label>' +
+          '<input id="lTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
+        '<div class="champ"><label for="lPin">' + esc(t('pin')) + '</label>' +
+          '<input id="lPin" type="password" inputmode="numeric" maxlength="6" ' +
+          'autocomplete="current-password"></div>' +
+      '</div>' +
+      '<div id="compteErr"></div>' +
+      '<button class="cta" id="seConnecter">' + esc(t('signIn')) + '</button>' +
+      '<button class="ghost" id="versInscription">' + esc(t('newAccount')) + '</button>';
+  } else if (invite) {
+    h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('account')) + '</h2></div>' +
+      '<div class="shoplist">' +
+        '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
+          '<input id="fNom" autocomplete="name" value="' +
+          esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
+        '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
+          '<input id="fTel" type="tel" inputmode="tel" autocomplete="username" value="' +
+          esc(prof ? prof.telephone : '') + '"></div>' +
+        '<div class="champ"><label for="fPin">' + esc(t('pin')) + '</label>' +
+          '<input id="fPin" type="password" inputmode="numeric" maxlength="6" ' +
+          'autocomplete="new-password"></div>' +
+        '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
+          '<input id="fMail" type="email" inputmode="email" autocomplete="email" value="' +
+          esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
+      '</div>' +
+      '<p class="note">' + esc(t('pinWhy')) + '</p>' +
+      '<p class="note" style="padding-top:0">' + esc(t('phoneWhy')) + '</p>' +
+      '<div id="compteErr"></div>' +
+      '<button class="ghost" id="versConnexion">' + esc(t('haveAccount')) + '</button>';
+  } else {
+    h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('account')) + '</h2>' +
+        '<span class="pill done">' + esc(t('connected')) + '</span></div>' +
+      '<div class="shoplist">' +
+        '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
+          '<input id="fNom" autocomplete="name" value="' +
+          esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
+        '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
+          '<input id="fTel" type="tel" inputmode="tel" value="' +
+          esc(prof ? prof.telephone : '') + '"></div>' +
+        '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
+          '<input id="fMail" type="email" inputmode="email" value="' +
+          esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
+      '</div>' +
+      '<p class="note">' + esc(t('phoneWhy')) + '</p>' +
+      '<div id="compteErr"></div>';
+  }
 
   h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('pickT')) + '</h2></div><div class="picker">' +
     cache.points.map(function (pt) {
@@ -526,6 +588,7 @@ function jour(iso) {
 async function rendreCommandes() {
   el('ordersTitle').textContent = t('orders');
   el('ordersNote').textContent = t('ordersNote');
+  invite = await API.estInvite().catch(function () { return true; });
   const zone = el('orderList');
   zone.innerHTML = '<p class="empty">…</p>';
   try {
@@ -535,7 +598,10 @@ async function rendreCommandes() {
     return;
   }
   const liste = cache.commandes || [];
-  zone.innerHTML = liste.length ? liste.map(function (o) {
+  const pied = invite
+    ? ''
+    : '<button class="ghost" id="seDeconnecter">' + esc(t('signOut')) + '</button>';
+  zone.innerHTML = (liste.length ? liste.map(function (o) {
     const pl = pastille(o.statut);
     const l0 = (o.lignes && o.lignes[0]) || { nom_produit: '' };
     const n = (o.lignes || []).reduce(function (s, l) { return s + l.quantite; }, 0);
@@ -550,7 +616,7 @@ async function rendreCommandes() {
       '<span class="pill ' + pl.c + '">' + esc(t(pl.k)) + '</span>' +
     '</button>';
   }).join('') : '<p class="empty">' + esc(t('noOrders')) + '</p>' +
-      '<button class="ghost" data-go="home">' + esc(t('browse')) + '</button>';
+      '<button class="ghost" data-go="home">' + esc(t('browse')) + '</button>') + pied;
 }
 
 async function rendreCommande() {
@@ -571,11 +637,18 @@ async function rendreCommande() {
     '<div class="prow"><h1 class="pname">' + esc(o.reference) + '</h1>' +
       '<span class="pill ' + pl.c + '">' + esc(t(pl.k)) + '</span></div>' +
     '<p class="note" style="padding:0">' + esc(t('orderOf')) + ' ' + esc(jour(o.cree_le)) + '</p>' +
-    (code && !fini
-      ? '<div class="code"><div class="eyebrow">' + esc(t('codeT')) + '</div>' +
-        '<div class="codenum num">' + esc(code) + '</div></div>' +
-        '<p class="note" style="padding:0">' + esc(t('codeNote')) + '</p>'
-      : '') +
+    (fini ? '' :
+      (code
+        ? '<div class="code"><div class="eyebrow">' + esc(t('codeT')) + '</div>' +
+          '<div class="codenum num">' + esc(code) + '</div></div>' +
+          '<p class="note" style="padding:0">' + esc(t('codeNote')) + '</p>'
+        : '') +
+      // Téléphone perdu : le code n'est gardé que haché, personne ne peut
+      // le relire. Avec un compte, on en redemande un et l'ancien meurt.
+      '<div id="codeMsg"></div>' +
+      '<button class="ghost" data-recode="' + esc(o.id) + '">' +
+        esc(t('lostCode')) + '</button>'
+    ) +
     (o.point ? '<div class="totals"><div class="trow"><span>' + esc(t('pickT')) + '</span>' +
       '<span style="text-align:right">' + esc(o.point.nom) + '<br>' +
       '<span class="cshop">' + esc(o.point.repere) + '</span></span></div></div>' : '') +
@@ -661,9 +734,16 @@ async function envoyerCommande() {
   const btn = el('orderBtn'), err = el('cartErr');
   const nom = (el('fNom').value || '').trim();
   const tel = (el('fTel').value || '').trim();
+  const mail = (el('fMail') && el('fMail').value || '').trim();
+  const pin = (el('fPin') && el('fPin').value || '').trim();
 
-  if (!nom || tel.length < 8) {
-    err.innerHTML = '<div class="erreur">' + esc(t('needName')) + '</div>';
+  if (!nom || !API.telValide(tel)) {
+    err.innerHTML = '<div class="erreur">' +
+      esc(API.telValide(tel) ? t('needName') : t('needTel')) + '</div>';
+    return;
+  }
+  if (invite && pin.length !== 6) {
+    err.innerHTML = '<div class="erreur">' + esc(t('needPin')) + '</div>';
     return;
   }
   if (!pointChoisi) {
@@ -677,11 +757,16 @@ async function envoyerCommande() {
   btn.textContent = t('ordering');
 
   try {
-    const mail = (el('fMail') && el('fMail').value || '').trim();
-    await API.majProfil({
-      nom: nom, telephone: tel, langue: lang,
-      email_contact: mail || null
-    });
+    // Le compte se crée au moment de commander, pas à l'entrée du site.
+    if (invite) {
+      await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang });
+      invite = false;
+    } else {
+      await API.majProfil({
+        nom: nom, telephone: API.normaliserTel(tel), langue: lang,
+        email_contact: mail || null
+      });
+    }
     const res = await API.creerCommande(
       panier.map(function (l) { return { variante: l.variante, quantite: l.quantite }; }),
       pointChoisi
@@ -718,6 +803,30 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'orderBack') { aller('orders'); return; }
   if (cible.id === 'orderBtn') { envoyerCommande(); return; }
 
+  if (cible.id === 'versConnexion') { modeConnexion = true; rendrePanier(); return; }
+  if (cible.id === 'versInscription') { modeConnexion = false; rendrePanier(); return; }
+
+  if (cible.id === 'seConnecter') {
+    const tel = (el('lTel').value || '').trim();
+    const pin = (el('lPin').value || '').trim();
+    const z = el('compteErr');
+    cible.disabled = true;
+    API.connecter(tel, pin).then(function () {
+      modeConnexion = false;
+      invite = false;
+      cache.commandes = [];
+      rendrePanier();
+    }).catch(function (e) {
+      z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    }).then(function () { cible.disabled = false; });
+    return;
+  }
+
+  if (cible.id === 'seDeconnecter') {
+    API.deconnecter().then(function () { location.reload(); });
+    return;
+  }
+
   if (cible.id === 'addBtn') {
     const p = prodCourant;
     if (!p) return;
@@ -743,9 +852,28 @@ document.addEventListener('click', function (ev) {
     return;
   }
 
-  const n = cible.closest ? cible.closest('[data-prod],[data-shop],[data-cat],[data-go],[data-pick],[data-var],[data-inc],[data-dec],[data-order]') : null;
+  const n = cible.closest ? cible.closest('[data-prod],[data-shop],[data-cat],[data-go],[data-pick],[data-var],[data-inc],[data-dec],[data-order],[data-recode]') : null;
   if (!n) return;
 
+  if (n.hasAttribute('data-recode')) {
+    const id = n.getAttribute('data-recode');
+    const z = el('codeMsg');
+    n.disabled = true;
+    API.regenererCode(id).then(function (r) {
+      // On le range localement comme à la commande, pour qu'il survive
+      // à un rechargement de la page.
+      try {
+        const codes = JSON.parse(localStorage.getItem('bl:codes') || '{}');
+        const o = (cache.commandes || []).filter(function (x) { return x.id === id; })[0];
+        if (o) { codes[o.reference] = r.code; localStorage.setItem('bl:codes', JSON.stringify(codes)); }
+      } catch (e) {}
+      if (z) z.innerHTML = '<div class="warnbox">' + esc(t('newCodeDone')) + '</div>';
+      rendreCommande();
+    }).catch(function (e) {
+      if (z) z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    }).then(function () { n.disabled = false; });
+    return;
+  }
   if (n.hasAttribute('data-order')) { commandeCourante = n.getAttribute('data-order'); aller('order'); return; }
   if (n.hasAttribute('data-prod')) {
     const id = n.getAttribute('data-prod');
@@ -840,7 +968,10 @@ async function assurerLib() {
   const libOk = await assurerLib();
   if (!libOk) horsLigne = true;
 
-  try { await API.session(); } catch (e) { /* hors ligne : on affiche le cache */ }
+  try {
+    await API.session();
+    invite = await API.estInvite();
+  } catch (e) { /* hors ligne : on affiche le cache */ }
   await chargerReferentiels();
   await chargerCatalogue();
   appliquerLangue();

@@ -16,14 +16,29 @@ réglages que seul le tableau de bord permet.
 
 **Authentication → Sign In / Providers → Anonymous sign-ins → activer.**
 
-Pourquoi : il n'y a pas de mur d'inscription. L'acheteur navigue et commande
-sans créer de compte, parce qu'en Haïti une inscription par e-mail fait perdre
-la majorité des premiers acheteurs. Supabase crée quand même un vrai compte en
-arrière-plan, donc la sécurité par ligne fonctionne normalement, et ce compte
-pourra recevoir un numéro de téléphone plus tard sans perdre l'historique des
-commandes.
+Pourquoi : l'acheteur navigue sans compte. Le compte n'est exigé qu'au moment
+de commander — un mur d'inscription à l'entrée fait fuir un premier visiteur
+qui ne connaît pas encore la plateforme. La session de passage devient un vrai
+compte au paiement, sans rien perdre.
 
-Sans cet interrupteur, aucune commande ne peut être créée.
+### 1 bis. Désactiver la confirmation d'e-mail
+
+**Authentication → Sign In / Providers → Email → « Confirm email » → désactiver.**
+
+Pourquoi : les comptes sont identifiés par le NUMÉRO DE TÉLÉPHONE et un code
+secret à 6 chiffres. Techniquement Supabase authentifie par e-mail, donc l'app
+fabrique un identifiant interne à partir du numéro (`50931324336@lakay.local`).
+L'acheteur ne le voit jamais. Si la confirmation reste active, Supabase attend
+une validation sur une adresse qui n'existe pas, et aucun compte ne s'active.
+
+Pourquoi le téléphone plutôt que l'e-mail : tout le monde a un numéro, peu
+consultent une boîte mail, et c'est déjà le numéro que l'agent appelle pour
+confirmer la commande. Pourquoi un code à 6 chiffres plutôt qu'un mot de passe :
+c'est le geste de MonCash, connu de tous, et bien plus facile à taper sur un
+téléphone.
+
+Le jour où un envoi de SMS sera budgété, on passera au vrai téléphone Supabase
+sans rien changer à ce que voit l'acheteur.
 
 ### 2. Créer ton compte d'équipe
 
