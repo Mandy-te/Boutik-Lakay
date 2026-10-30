@@ -58,37 +58,40 @@ function blocMedias(p) {
 }
 
 function blocVariantes(p) {
-  const vs = (p.variantes || []).slice()
-    .sort(function (a, b) { return (a.libelle || '').localeCompare(b.libelle || ''); });
+  const noms = Object.keys(p.declinaisons || {});
+  const vs = (p.variantes || []).slice().sort(function (a, b) {
+    return (a.libelle || '').localeCompare(b.libelle || '');
+  });
 
   const lignes = vs.map(function (v) {
+    const att = v.attributs || {};
+    const titre = noms.length
+      ? noms.map(function (k) { return esc(att[k] || '\u2014'); }).join(' \u00b7 ')
+      : esc(v.libelle);
     return '<div class="vrow">' +
-      '<div class="champ lib"><label>Variante</label>' +
-        '<input value="' + esc(v.libelle) + '" data-vlib="' + esc(v.id) + '"></div>' +
+      '<div class="champ lib"><label>' + titre + '</label>' +
+        '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
+        '" data-vstock="' + esc(v.id) + '"></div>' +
       '<div class="champ"><label>Prix (HTG)</label>' +
         '<input inputmode="decimal" value="' + esc(enGourdes(v.prix)) +
         '" placeholder="' + esc(enGourdes(p.prix)) + '" data-vprix="' + esc(v.id) + '"></div>' +
-      '<div class="champ"><label>Stock</label>' +
-        '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
-        '" data-vstock="' + esc(v.id) + '"></div>' +
       '<button class="sup" data-supvar="' + esc(v.id) + '" data-prod="' + esc(p.id) +
-        '" aria-label="Supprimer la variante">×</button>' +
+        '" aria-label="Supprimer">\u00d7</button>' +
     '</div>';
   }).join('');
 
-  return lignes +
-    '<div class="vrow">' +
-      '<div class="champ lib"><label>Nouvelle variante</label>' +
-        '<input id="nv-lib-' + esc(p.id) + '" placeholder="100 ml, M, 42…"></div>' +
-      '<div class="champ"><label>Prix (HTG)</label>' +
-        '<input id="nv-prix-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
-        esc(enGourdes(p.prix)) + '"></div>' +
-      '<div class="champ"><label>Stock</label>' +
-        '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
-    '</div>' +
-    '<button class="mini" data-ajvar="' + esc(p.id) + '">Ajouter cette variante</button>' +
-    '<p class="note">Prix laissé vide = celui du produit. Un cremas 100 ml et ' +
-      'un 50 ml mettent chacun leur propre prix.</p>';
+  // L'administration garde la main même sur une fiche publiée : c'est
+  // elle qui corrige une variante mal saisie par un vendeur.
+  return blocDeclinaisons(p, {}) +
+    (vs.length
+      ? '<div class="sechead"><h2 style="font-size:13px">Stock par variante</h2></div>' + lignes
+      : '<p class="note">Aucune variante.</p>') +
+    (noms.length ? '' :
+      '<div class="vrow">' +
+        '<div class="champ lib"><label for="nv-stock-' + esc(p.id) + '">Quantité en stock</label>' +
+          '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
+        '<button class="mini" data-ajsimple="' + esc(p.id) + '">Enregistrer</button>' +
+      '</div>');
 }
 
 function formEdition(p) {
@@ -569,13 +572,10 @@ document.addEventListener('click', async function (ev) {
   }
 
   /* --- Catalogue : variantes --- */
-  if (c.hasAttribute('data-ajvar')) {
-    const id = c.getAttribute('data-ajvar');
-    const lib = val('nv-lib-' + id);
-    const prix = enCentimes(val('nv-prix-' + id));
-    const st = val('nv-stock-' + id);
+  if (c.hasAttribute('data-ajsimple')) {
+    const id = c.getAttribute('data-ajsimple');
     await agir(c, 'msg-' + id, function () {
-      return OPS.ajouterVariante(id, lib, prix, st);
+      return OPS.ajouterVariante(id, 'Standard', 0, val('nv-stock-' + id), {});
     }, rechargerProduits);
     return;
   }
@@ -906,12 +906,6 @@ document.addEventListener('keydown', function (ev) {
 function carteRevision(p) {
   const med = (p.medias || []).slice()
     .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
-  const axes = [];
-  (p.variantes || []).forEach(function (v) {
-    Object.keys(v.attributs || {}).forEach(function (k) {
-      if (axes.indexOf(k) === -1) axes.push(k); });
-  });
-
   return '<div class="bloc">' +
     '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
       '<span class="pill att">En révision</span></div>' +
@@ -949,15 +943,7 @@ function carteRevision(p) {
       '<button class="mini" data-rvsave="' + esc(p.id) + '">Enregistrer mes corrections</button>' +
     '</div>' +
 
-    '<div class="sechead"><h2 style="font-size:13px">Variantes' +
-      (axes.length ? ' \u2014 ' + axes.map(esc).join(', ') : '') + '</h2></div>' +
-    ((p.variantes || []).length
-      ? (p.variantes || []).map(function (v) {
-          return '<div class="ligne"><span>' + esc(v.libelle) + '</span>' +
-            '<span class="num">' + htg(v.prix || p.prix) + ' \u00b7 ' +
-            (v.stock || 0) + ' en stock</span></div>';
-        }).join('')
-      : '<p class="note" style="color:var(--hot)">Aucune variante.</p>') +
+    blocVariantes(p) +
 
     '<div class="champ"><label for="rv-com-' + esc(p.id) + '">Motif du refus</label>' +
       '<textarea id="rv-com-' + esc(p.id) + '" rows="3" placeholder="Ce que le vendeur ' +
@@ -1427,6 +1413,17 @@ document.addEventListener('change', async function (ev) {
 });
 
 /* ---------- Démarrage ------------------------------------- */
+
+brancherDeclinaisons(
+  function (id) {
+    return produits.filter(function (p) { return p.id === id; })[0] ||
+           aRevisers.filter(function (p) { return p.id === id; })[0];
+  },
+  async function () {
+    if (ongletActif === 'revision') await rendreRevision();
+    else await rechargerProduits();
+  }
+);
 
 EQUIPE.brancher(['admin'], async function () {
   await rechargerBase();

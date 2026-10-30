@@ -151,3 +151,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .recue .rangee{margin-left:auto}
 
 .pieces{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* Une déclinaison : son nom, ses valeurs, de quoi en ajouter. */
+.decl{border:1px solid var(--line);border-radius:11px;padding:11px;
+  display:flex;flex-direction:column;gap:9px;margin-bottom:9px}
+.decl .titreligne{justify-content:space-between}
+.decl .sup{color:var(--hot);background:none;border:0;font-size:17px;padding:0 4px;flex:none}

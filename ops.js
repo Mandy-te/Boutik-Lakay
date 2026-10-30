@@ -393,6 +393,45 @@ const OPS = (function () {
     return data;
   }
 
+  /* Crée toutes les combinaisons manquantes d'un coup. Un t-shirt en
+     3 tailles et 2 couleurs fait 6 variantes : les saisir une par une
+     est le genre de corvée qui fait abandonner un vendeur. */
+  async function genererVariantes(produitId) {
+    const { data: p, error } = await sb().from('produits')
+      .select('id, prix, declinaisons, variantes(id, attributs)')
+      .eq('id', produitId).single();
+    if (error) throw error;
+
+    const voulues = combinaisons(p.declinaisons || {});
+    if (!voulues.length) throw new Error('Déclarez d\u2019abord des déclinaisons et leurs valeurs.');
+
+    const noms = Object.keys(p.declinaisons || {});
+    const existantes = (p.variantes || []).map(function (v) { return v.attributs || {}; });
+    const aCreer = voulues.filter(function (c) {
+      return !existantes.some(function (e) { return memeCombinaison(e, c); });
+    });
+    if (!aCreer.length) return { crees: 0 };
+
+    const lignes = aCreer.map(function (c) {
+      return {
+        produit: produitId,
+        libelle: etiquette(c, noms),
+        attributs: c,
+        prix: null,
+        stock: 0
+      };
+    });
+    const r = await sb().from('variantes').insert(lignes);
+    if (r.error) throw r.error;
+    return { crees: aCreer.length };
+  }
+
+  async function majDeclinaisons(produitId, declinaisons) {
+    const { error } = await sb().from('produits')
+      .update({ declinaisons: declinaisons }).eq('id', produitId);
+    if (error) throw error;
+  }
+
   async function majVariante(varianteId, champs) {
     const { error } = await sb().from('variantes').update(champs).eq('id', varianteId);
     if (error) throw error;
@@ -735,6 +774,7 @@ const OPS = (function () {
     aReviser: aReviser, libelleDeAttributs: libelleDeAttributs,
     majProduit: majProduit, supprimerProduit: supprimerProduit,
     ajouterVariante: ajouterVariante, majVariante: majVariante,
+    genererVariantes: genererVariantes, majDeclinaisons: majDeclinaisons,
     supprimerVariante: supprimerVariante,
     typeDe: typeDe, verifierMedia: verifierMedia,
     televerserMedia: televerserMedia, televerserPlusieurs: televerserPlusieurs,
