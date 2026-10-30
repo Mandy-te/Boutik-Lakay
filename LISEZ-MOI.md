@@ -213,9 +213,11 @@ et le parcours. À ne faire qu'une fois la société enregistrée.
 
 ## Ce qui n'est pas encore là
 
-- **L'espace vendeur.** Le vendeur ne voit pas encore ses propres ventes ni
-  son solde depuis l'app. Les fonctions de lecture existent dans `api.js`,
-  l'écran reste à faire. En attendant, l'équipe lui transmet ses commandes.
+- **L'envoi des messages.** Les avis sont bien produits et lisibles dans
+  l'app — cloche en haut de l'écran acheteur — mais **rien ne part encore**
+  ni par e-mail ni par SMS. La table `notifications` fait office de file
+  d'attente : le jour où un fournisseur est branché, il n'y a qu'à la vider.
+  Pour Haïti, viser le SMS ou WhatsApp plutôt que l'e-mail.
 - **Le transfert d'une boutique à son vendeur.** Les boutiques sont créées au
   nom de l'agent. Quand un vendeur aura son propre compte, il faudra pouvoir
   lui passer la propriété.
@@ -223,9 +225,23 @@ et le parcours. À ne faire qu'une fois la société enregistrée.
   « ouvrir un litige » côté acheteur n'existera que quand les règles seront
   tranchées : qui arbitre, sous quel délai, avec quel plafond d'indemnisation.
   Un bouton qui promet un arbitrage inexistant est pire que pas de bouton.
-- **Les relances automatiques.** Personne ne prévient le client que son colis
-  est arrivé ni que son délai court. Pour l'instant c'est l'appel de l'agent
-  qui fait ce travail, ce qui tient à l'échelle du pilote, pas au-delà.
+- **Les relances automatiques.** Rien ne rappelle au client que son délai de
+  retrait court. Il faut une tâche planifiée côté Supabase, pas un bout de
+  code dans l'app : personne ne garantit qu'un navigateur sera ouvert.
+
+### Une ligne de ménage à passer dans l'éditeur SQL
+
+Il reste deux versions de `avancer_commande` en base. L'ancienne, à deux
+arguments, ne sert plus à rien : son corps renvoie vers la version stricte,
+donc elle ne contourne rien. Mais tant qu'elle existe, un appel à deux
+arguments est ambigu et Postgres répond `function is not unique`. Pour faire
+propre, coller ceci une fois dans l'éditeur SQL de Supabase :
+
+```sql
+drop function public.avancer_commande(uuid, statut_commande);
+```
+
+Ce n'est pas urgent : l'app appelle toujours la version à trois arguments.
 
 ---
 

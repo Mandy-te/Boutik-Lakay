@@ -68,14 +68,40 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
-.hbar{display:flex;align-items:center;gap:10px;padding-block:11px}
-.mark{font-family:var(--display);font-size:19px;letter-spacing:-.03em;display:flex;align-items:baseline;gap:5px;background:none;border:0;padding:0}
+.hbar{display:flex;align-items:center;gap:8px;padding-block:11px}
+/* La marque cède la place en premier : avec la cloche, l'en-tête
+   dépassait d'un pixel sur un écran de 390 px et toute la page
+   glissait latéralement. */
+.mark{font-family:var(--display);font-size:19px;letter-spacing:-.03em;display:flex;align-items:baseline;gap:5px;background:none;border:0;padding:0;min-width:0;overflow:hidden}
 .mark em{font-style:normal;color:var(--hot)}
 .spacer{flex:1}
 .compteBtn{display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--line);
   border-radius:999px;padding:5px 11px 5px 9px;font-size:12px;font-weight:600;color:var(--ink-soft);flex:none}
 .compteBtn svg{width:17px;height:17px}
 .compteBtn span:empty{display:none}
+/* Sur un petit écran, c'est le mot « Connecté » qui part, pas le nom
+   de la marque : l'icône du compte dit déjà la même chose. */
+/* Sur un téléphone, c'est le mot « Connecté » qui part, pas le nom de
+   la marque : la cloche et l'icône du compte disent déjà qu'on est
+   connecté, et une marque tronquée en plein mot fait bâclé. */
+@media (max-width:409px){ #compteEtat{display:none} .compteBtn{padding:5px 10px} }
+@media (max-width:339px){ .mark{font-size:16.5px} .hbar{gap:7px} }
+.clocheBtn{position:relative;background:none;border:1px solid var(--line);border-radius:999px;
+  padding:6px 9px;color:var(--ink-soft);flex:none;display:grid;place-items:center}
+.clocheBtn svg{width:18px;height:18px;display:block}
+/* Le compteur sort du bouton : la cloche reste lisible même à 3 chiffres. */
+.pastille{position:absolute;top:-5px;right:-5px;background:var(--hot);color:#fff;font-size:9.5px;
+  font-weight:700;min-width:16px;height:16px;border-radius:999px;display:grid;place-items:center;padding:0 4px}
+
+/* Boîte de réception : un message non lu se voit du coin de l'œil. */
+.msg{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface);padding:12px 13px;margin-bottom:8px}
+.msg.neuf{border-color:var(--brand);background:var(--brand-soft)}
+.msgtop{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.msgsujet{font-weight:700;font-size:13.5px;flex:1;min-width:0}
+.msgquand{font-size:11px;color:var(--ink-soft);flex:none}
+.msgcorps{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+.msgsuite{display:inline-block;margin-top:7px;font-size:12px;font-weight:700;color:var(--brand)}
 .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
 .lang button{background:none;border:0;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-soft)}
 .lang button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
@@ -215,6 +241,7 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
   <symbol id="i-orders" viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
   <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.4l2.3 11h9.8l2.1-8H7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4.5 20.5c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 3.2.8 4.8 1.7 5.8.4.4.1 1.2-.5 1.2H5.3c-.6 0-.9-.8-.5-1.2.9-1 1.7-2.6 1.7-5.8z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="10.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
 </svg>
 
@@ -222,6 +249,9 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
   <div class="wrap hbar">
     <button class="mark" id="markBtn">Boutique <em>Lakay</em></button>
     <span class="spacer"></span>
+    <button class="clocheBtn" id="clocheBtn" aria-label="Mes messages" hidden>
+      <svg><use href="#i-bell"/></svg><span class="pastille" id="nonLus" hidden>0</span>
+    </button>
     <button class="compteBtn" id="compteBtn" aria-label="Mon compte">
       <svg><use href="#i-user"/></svg><span id="compteEtat"></span>
     </button>
@@ -279,6 +309,12 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
   <section id="view-compte" class="wrap" hidden>
     <div class="sechead"><h2 id="compteTitre"></h2></div>
     <div id="compteCorps"></div>
+  </section>
+
+  <section id="view-messages" class="wrap" hidden>
+    <div class="sechead"><h2 id="msgTitre"></h2></div>
+    <p class="note" id="msgNote"></p>
+    <div id="msgListe"></div>
   </section>
 
   <section id="view-orders" class="wrap" hidden>

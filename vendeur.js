@@ -59,6 +59,24 @@ function carteCommande(o) {
   '</div>';
 }
 
+/* La pastille de l'onglet. Elle se met à jour même quand le vendeur
+   est ailleurs : c'est tout l'intérêt. Silencieuse en cas d'échec,
+   une pastille absente ne doit pas bloquer l'écran. */
+function majPastilleOng(n) {
+  const p = el('aPreparer');
+  if (!p) return;
+  p.textContent = n > 9 ? '9+' : String(n);
+  p.hidden = !n;
+}
+
+async function compterAPreparer() {
+  try {
+    const liste = await OPS.commandesAPreparer();
+    commandes = liste;
+    majPastilleOng(liste.filter(function (o) { return mesLignes(o).length; }).length);
+  } catch (e) { majPastilleOng(0); }
+}
+
 async function rendrePreparer() {
   const z = el('panneau');
   z.innerHTML = '<div class="sechead"><h2>À préparer</h2></div><p class="empty">…</p>';
@@ -69,6 +87,7 @@ async function rendrePreparer() {
     return;
   }
   const miennes = commandes.filter(function (o) { return mesLignes(o).length; });
+  majPastilleOng(miennes.length);
 
   z.innerHTML =
     '<div class="sechead"><h2>À préparer</h2><span class="eyebrow num">' +
@@ -680,4 +699,9 @@ EQUIPE.brancher(['vendeur', 'admin'], async function () {
   categories = (await API.categories().catch(function () { return { data: [] }; })).data || [];
   plans = await OPS.plans().catch(function () { return []; });
   await rendre();
+  if (onglet !== 'preparer') await compterAPreparer();
+  // Ses messages sont marqués lus à l'ouverture : la file garde la
+  // trace pour le jour où un SMS part vraiment, mais elle n'a pas à
+  // s'empiler alors que la pastille dit déjà l'essentiel.
+  API.marquerMessagesLus('vendeur').catch(function () {});
 }, { ouAvecBoutique: true });

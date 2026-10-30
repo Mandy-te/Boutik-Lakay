@@ -251,21 +251,33 @@ const API = (function () {
     });
   }
 
-  /* Même calcul que frais_livraison() en base : tarif particulier pour
-     la commune d'origine, sinon tarif de base du point. Une commande à
-     plusieurs boutiques paie un trajet par boutique. */
-  function calculerFrais(point, communesOrigine, lesTarifs) {
+  /* Même calcul que creer_commande() en base : UN frais par BOUTIQUE,
+     pas par commune. Deux boutiques de la même ville remettent deux
+     colis distincts, donc deux frais. La commune ne sert qu'à choisir
+     le tarif : tarif particulier pour le couple (point, commune
+     d'origine), sinon tarif de base du point.
+
+     `origines` est la liste des boutiques du panier, chacune sous la
+     forme { id, commune }. On dédoublonne sur l'identifiant de la
+     boutique, exactement comme la boucle v_boutiques en base. */
+  function calculerFrais(point, origines, lesTarifs) {
     if (!point) return 0;
     // La même clé que cle_lieu() côté serveur : sans ça le panier
     // afficherait un frais et le comptoir en encaisserait un autre.
     const norm = (typeof cleLieu === 'function') ? cleLieu : function (x) {
       return String(x || '').trim().toLowerCase();
     };
-    const vues = {};
-    (communesOrigine || []).forEach(function (c) { vues[norm(c)] = c; });
-    return Object.keys(vues).reduce(function (total, cle) {
+    const parBoutique = {};
+    (origines || []).forEach(function (o) {
+      if (!o) return;
+      // Sans identifiant de boutique, la commune sert de clé : on
+      // préfère regrouper que de compter deux fois au hasard.
+      parBoutique[o.id || ('com:' + norm(o.commune))] = o.commune;
+    });
+    return Object.keys(parBoutique).reduce(function (total, cle) {
+      const c = norm(parBoutique[cle]);
       const t = (lesTarifs || []).filter(function (x) {
-        return x.point_retrait === point.id && norm(x.commune_origine) === cle;
+        return x.point_retrait === point.id && norm(x.commune_origine) === c;
       })[0];
       return total + (t ? Number(t.frais) : Number(point.frais || 25000));
     }, 0);
@@ -410,6 +422,29 @@ const API = (function () {
     return data;
   }
 
+  /* Messages. Rien n'envoie encore d'e-mail ni de SMS : ces lignes
+     sont d'abord faites pour être lues ici. La politique de lecture
+     en base ne laisse passer que les messages de ses propres
+     commandes, donc pas de filtre à écrire côté client. */
+  async function mesMessages(pour) {
+    await session();
+    const { data, error } = await sb().from('notifications')
+      .select('id, commande, evenement, sujet, corps, cree_le, lu_le, pour')
+      .eq('pour', pour || 'acheteur')
+      .order('cree_le', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function marquerMessagesLus(pour) {
+    const { data, error } = await sb().rpc('marquer_notifications_lues', {
+      p_pour: pour || 'acheteur'
+    });
+    if (error) throw error;
+    return Number(data || 0);
+  }
+
   /* ---------- Espace vendeur ------------------------------- */
 
   async function maBoutique() {
@@ -449,6 +484,7 @@ const API = (function () {
     prixVariante: prixVariante, fourchette: fourchette, medias: medias,
     creerCommande: creerCommande, codeLocal: codeLocal,
     mesCommandes: mesCommandes, commande: commande,
+    mesMessages: mesMessages, marquerMessagesLus: marquerMessagesLus,
     maBoutique: maBoutique, commandesBoutique: commandesBoutique,
     soldeBoutique: soldeBoutique
   };

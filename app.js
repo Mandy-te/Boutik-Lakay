@@ -15,6 +15,10 @@ const T = {
     sellHere:'Vendre sur Boutique Lakay',
     cart:'Panier', orders:'Mes commandes',
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
+    messages:'Mes messages',
+    messagesNote:'Les avis sur vos commandes arrivent ici.',
+    noMessages:'Aucun message pour le moment.',
+    voirCommande:'Voir la commande →',
     navHome:'Accueil', navShops:'Boutiques', navOrders:'Commandes', navCart:'Panier',
     back:'← Retour', items:'articles', by:'Vendu par', stock:'en stock',
     add:'Mettre au panier', soldout:'Rupture de stock', size:'Choix', verified:'VÉRIFIÉ', pickAll:'Choisissez chaque option',
@@ -81,6 +85,10 @@ const T = {
     sellHere:'Vann sou Boutique Lakay',
     cart:'Panyen', orders:'Kòmand mwen',
     ordersNote:'Swiv chak kòmand jiska retrè a.',
+    messages:'Mesaj mwen',
+    messagesNote:'Avi sou kòmand ou yo rive la.',
+    noMessages:'Pa gen mesaj pou kounye a.',
+    voirCommande:'Gade kòmand lan →',
     navHome:'Akèy', navShops:'Boutik', navOrders:'Kòmand', navCart:'Panyen',
     back:'← Tounen', items:'atik', by:'Machann', stock:'nan stock',
     add:'Mete nan panyen', soldout:'Pa gen ankò', size:'Chwa', verified:'VERIFYE', pickAll:'Chwazi chak opsyon',
@@ -155,7 +163,8 @@ let recherche = '';
 let panier = [];
 try { panier = JSON.parse(localStorage.getItem('bl:panier') || '[]'); } catch (e) { panier = []; }
 
-let cache = { categories: [], points: [], tarifs: [], produits: [], boutiques: [], commandes: [] };
+let cache = { categories: [], points: [], tarifs: [], produits: [], boutiques: [],
+  commandes: [], messages: [] };
 let prodCourant = null, boutiqueCourante = null, commandeCourante = null;
 let pointChoisi = null;
 let depRetrait = null;    // département choisi pour le retrait
@@ -531,15 +540,16 @@ function rendreProduit() {
    meilleure façon de perdre un acheteur. */
 function totaux() {
   let sous = 0;
-  const communes = [];
+  // Un frais par boutique, comme en base : chacune remet son colis.
+  const origines = [];
   panier.forEach(function (l) {
     sous += l.prix * l.quantite;
-    if (l.boutiqueCommune && communes.indexOf(l.boutiqueCommune) === -1) {
-      communes.push(l.boutiqueCommune);
+    if (!origines.some(function (o) { return o.id === l.boutiqueId; })) {
+      origines.push({ id: l.boutiqueId, commune: l.boutiqueCommune });
     }
   });
   const pt = (cache.points || []).filter(function (p) { return p.id === pointChoisi; })[0];
-  const frais = pt ? API.calculerFrais(pt, communes, cache.tarifs) : 0;
+  const frais = pt ? API.calculerFrais(pt, origines, cache.tarifs) : 0;
   return { sous: sous, frais: frais, total: sous + frais };
 }
 
@@ -932,7 +942,8 @@ async function rendreCommande() {
 
 /* ---------- Navigation ------------------------------------ */
 
-const VUES = ['home', 'shops', 'shop', 'product', 'cart', 'done', 'orders', 'order', 'compte'];
+const VUES = ['home', 'shops', 'shop', 'product', 'cart', 'done', 'orders', 'order',
+  'compte', 'messages'];
 
 function aller(v) {
   if (v === 'product' || v === 'shop' || v === 'order') vuePrec = vue;
@@ -951,6 +962,7 @@ function aller(v) {
   if (v === 'orders') rendreCommandes();
   if (v === 'order') rendreCommande();
   if (v === 'compte') rendreCompte();
+  if (v === 'messages') rendreMessages();
   majBandeau();
   majEtatCompte();
   window.scrollTo(0, 0);
@@ -959,6 +971,81 @@ function aller(v) {
 function majEtatCompte() {
   const s = el('compteEtat');
   if (s) s.textContent = invite ? '' : t('connected');
+  const b = el('clocheBtn');
+  // Pas de cloche pour une session de passage : il n'y a rien à y voir.
+  if (b) b.hidden = invite;
+  if (invite) majPastille(0);
+}
+
+function majPastille(n) {
+  const p = el('nonLus');
+  if (!p) return;
+  p.textContent = n > 9 ? '9+' : String(n);
+  p.hidden = !n;
+}
+
+/* Combien de messages non lus, sans afficher la liste : c'est ce qui
+   fait que l'acheteur pense à venir voir. Silencieux en cas d'échec —
+   un compteur absent ne doit pas casser l'accueil. */
+async function compterNonLus() {
+  if (invite) { majPastille(0); return; }
+  try {
+    const liste = await API.mesMessages('acheteur');
+    cache.messages = liste;
+    majPastille(liste.filter(function (m) { return !m.lu_le; }).length);
+  } catch (e) { majPastille(0); }
+}
+
+async function rendreMessages() {
+  el('msgTitre').textContent = t('messages');
+  el('msgNote').textContent = t('messagesNote');
+  const zone = el('msgListe');
+  zone.innerHTML = '<p class="empty">…</p>';
+
+  let liste;
+  try {
+    liste = await API.mesMessages('acheteur');
+  } catch (e) {
+    zone.innerHTML = '<p class="empty">' + esc(t('loadErr')) + '</p>';
+    return;
+  }
+  cache.messages = liste;
+
+  zone.innerHTML = liste.length ? liste.map(function (m) {
+    return '<div class="msg' + (m.lu_le ? '' : ' neuf') + '">' +
+      '<div class="msgtop">' +
+        '<span class="msgsujet">' + esc(m.sujet || '') + '</span>' +
+        '<span class="msgquand">' + esc(quandCourt(m.cree_le)) + '</span>' +
+      '</div>' +
+      '<div class="msgcorps">' + esc(m.corps || '') + '</div>' +
+      (m.commande
+        ? '<button class="msgsuite" data-order="' + esc(m.commande) + '">' +
+          esc(t('voirCommande')) + '</button>'
+        : '') +
+    '</div>';
+  }).join('') : '<p class="empty">' + esc(t('noMessages')) + '</p>';
+
+  // Vus, donc lus. La pastille tombe tout de suite, sans attendre le
+  // serveur : si l'appel échoue, le prochain passage la remettra.
+  if (liste.some(function (m) { return !m.lu_le; })) {
+    majPastille(0);
+    API.marquerMessagesLus('acheteur').catch(function () {});
+  }
+}
+
+// « il y a 2 h », « hier », « le 12/10 » : plus parlant qu'une date
+// complète pour un message qui vient d'arriver.
+function quandCourt(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const min = Math.round((Date.now() - d.getTime()) / 60000);
+  if (min < 2) return lang === 'ht' ? 'kounye a' : 'à l’instant';
+  if (min < 60) return (lang === 'ht' ? 'gen ' : 'il y a ') + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 24) return (lang === 'ht' ? 'gen ' : 'il y a ') + h + ' h';
+  if (h < 48) return lang === 'ht' ? 'yè' : 'hier';
+  return d.toLocaleDateString(lang === 'ht' ? 'fr-HT' : 'fr-FR',
+    { day: '2-digit', month: '2-digit' });
 }
 
 function majCompteur() {
@@ -1049,6 +1136,7 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'versInscription') { modeConnexion = false; rendreCompte(); return; }
 
   if (cible.id === 'compteBtn') { aller('compte'); return; }
+  if (cible.id === 'clocheBtn') { aller('messages'); return; }
 
   if (cible.id === 'creerCompte') {
     const nom = val2('cNom'), tel = val2('cTel'), pin = val2('cPin');
@@ -1106,7 +1194,9 @@ document.addEventListener('click', function (ev) {
       modeConnexion = false;
       invite = false;
       cache.commandes = [];
+      cache.messages = [];
       aller(panier.length ? 'cart' : 'compte');
+      compterNonLus();
     }).catch(function (e) {
       const apres = noterEchec(tel);
       const bloque = blocageRestant(tel);
@@ -1294,6 +1384,7 @@ async function assurerLib() {
   await chargerReferentiels();
   await chargerCatalogue();
   appliquerLangue();
+  compterNonLus();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
   }
