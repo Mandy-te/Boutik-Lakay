@@ -139,10 +139,11 @@ function carteProduit(p) {
     ) +
 
     blocMedias(p) +
-    '<div class="champ"><label for="ph-' + esc(p.id) + '">Ajouter des photos ou une vidéo</label>' +
-      '<input id="ph-' + esc(p.id) + '" type="file" multiple ' +
-      'accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" ' +
-      'data-photo="' + esc(p.id) + '"></div>' +
+    champFichier('ph-' + p.id, 'Ajouter des photos ou une vidéo', {
+      accept: 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm',
+      multiple: true, bouton: 'Choisir', vide: 'Photos ou vidéo',
+      data: 'data-photo="' + esc(p.id) + '"'
+    }) +
     '<div class="progres" id="prog-' + esc(p.id) + '"></div>' +
 
     blocVariantes(p) +

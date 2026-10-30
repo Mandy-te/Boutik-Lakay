@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', function () {
   if (d) d.innerHTML = optionsDepartements(null);
   if (c) c.innerHTML = optionsCommunes(null, null);
   lierDepartementCommune('vDep', 'vCommune');
+
+  // Sélecteurs de fichiers habillés en français.
+  const pieces = { accept: 'image/jpeg,image/png,image/webp,application/pdf' };
+  const a = el('champId'), b = el('champPatente');
+  if (a) a.innerHTML = champFichier('docId', 'Pièce d\u2019identité', pieces);
+  if (b) b.innerHTML = champFichier('docPatente', 'Patente', pieces);
 });
 
 function montrer(vue) {

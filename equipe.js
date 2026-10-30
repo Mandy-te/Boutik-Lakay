@@ -77,6 +77,39 @@ async function agir(bouton, zoneMsg, travail, apres) {
   }
 }
 
+/* ---------- Choix de fichier -----------------------------
+   Le sélecteur natif écrit « Choose File » en anglais et son texte
+   ne se change pas. On l'habille d'un label en français, et on
+   affiche le nom du fichier choisi — sans quoi l'utilisateur ne
+   sait pas si son appui a fait quelque chose.                   */
+
+function champFichier(id, libelle, options) {
+  const o = options || {};
+  return '<div class="champ">' +
+      (libelle ? '<label for="' + id + '">' + esc(libelle) + '</label>' : '') +
+      '<div class="fichier">' +
+        '<input type="file" id="' + id + '"' +
+          (o.accept ? ' accept="' + o.accept + '"' : '') +
+          (o.multiple ? ' multiple' : '') +
+          (o.data ? ' ' + o.data : '') + '>' +
+        '<label for="' + id + '">' + esc(o.bouton || 'Choisir un fichier') + '</label>' +
+        '<span class="nomFichier" id="nom-' + id + '">' +
+          esc(o.vide || 'Aucun fichier choisi') + '</span>' +
+      '</div>' +
+    '</div>';
+}
+
+// Un seul écouteur pour toute la page : le nom suit le choix.
+document.addEventListener('change', function (ev) {
+  const c = ev.target;
+  if (!c || c.type !== 'file') return;
+  const z = document.getElementById('nom-' + c.id);
+  if (!z) return;
+  const f = c.files;
+  if (!f || !f.length) { z.textContent = 'Aucun fichier choisi'; return; }
+  z.textContent = f.length > 1 ? f.length + ' fichiers choisis' : f[0].name;
+});
+
 /* ---------- Chaîne de suivi, vue par tous ----------------- */
 
 function pastilleStatut(statut) {

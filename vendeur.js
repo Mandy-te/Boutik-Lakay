@@ -18,6 +18,7 @@ let produits = [];
 let commandes = [];
 let categories = [];
 let produitEnEdition = null;
+let remplace = null;   // pièce dont on veut déposer une nouvelle version
 
 /* ---------- À préparer ----------------------------------- */
 
@@ -83,20 +84,39 @@ async function rendrePreparer() {
    faire recharger la page et interrompre le parcours. Il faut
    toujours un endroit où reprendre.                            */
 
+/* Une pièce déjà reçue n'affiche plus un sélecteur vide : c'était
+   contradictoire, le titre disait « reçue » et le champ disait « aucun
+   fichier choisi ». On confirme ce qui est arrivé, avec de quoi le
+   relire ou le remplacer si besoin. */
 function champPiece(id, libelle, chemin, zone) {
-  return '<div class="champ"><label for="' + id + '">' + esc(libelle) +
-    (chemin ? ' \u2014 reçue' : '') + '</label>' +
-    '<input id="' + id + '" type="file" ' +
-    'accept="image/jpeg,image/png,image/webp,application/pdf"></div>' +
-    '<div id="' + zone + '"></div>';
+  if (chemin && remplace !== id) {
+    return '<div class="champ"><label>' + esc(libelle) + '</label>' +
+      '<div class="recue"><span class="coche">\u2713</span>' +
+        '<span>Reçue</span>' +
+        '<span class="rangee">' +
+          '<button class="mini" data-voir="' + esc(chemin) + '">Voir</button> ' +
+          '<button class="mini" data-remplacer="' + id + '">Remplacer</button>' +
+        '</span>' +
+      '</div></div>' +
+      '<div id="' + zone + '"></div>';
+  }
+  return champFichier(id, libelle, {
+    accept: 'image/jpeg,image/png,image/webp,application/pdf',
+    bouton: 'Choisir un fichier',
+    vide: chemin ? 'Choisissez le nouveau fichier' : 'Aucun fichier choisi'
+  }) + '<div id="' + zone + '"></div>';
 }
 
 function blocPieces() {
   if (!boutique) return '';
+  const deux = boutique.piece_identite_url && boutique.patente_url;
   return champPiece('docId', 'Pièce d\u2019identité', boutique.piece_identite_url, 'msgId') +
     champPiece('docPatente', 'Patente', boutique.patente_url, 'msgPatente') +
-    '<p class="note">Elles restent privées : seule l\u2019équipe de Boutique Lakay ' +
-    'peut les consulter.</p>';
+    '<p class="note">' + (deux
+      ? 'Vos deux pièces sont arrivées. Un agent les vérifie et vous appelle. ' +
+        'Elles restent privées : seule l\u2019équipe de Boutique Lakay peut les consulter.'
+      : 'Elles restent privées : seule l\u2019équipe de Boutique Lakay peut les consulter.') +
+    '</p>';
 }
 
 async function deposerPiece(champ, genre, zoneMsg, colonne) {
@@ -121,6 +141,8 @@ async function deposerPiece(champ, genre, zoneMsg, colonne) {
   champs[colonne] = chemin;
   await OPS.majBoutique(boutique.id, champs);
   boutique = await API.maBoutique();
+  remplace = null;
+  await rendre();
   msg(zoneMsg, 'Reçue. Un agent la vérifiera.', 'ok');
 }
 
@@ -321,6 +343,16 @@ document.addEventListener('click', async function (ev) {
     await agir(c, 'msg-' + id, function () {
       return OPS.avancerCommande(id, c.getAttribute('data-vers'));
     }, rendrePreparer);
+    return;
+  }
+  if (c.hasAttribute('data-voir')) {
+    await agir(c, null, function () { return OPS.lienDocument(c.getAttribute('data-voir')); },
+      function (url) { if (url) window.open(url, '_blank', 'noopener'); });
+    return;
+  }
+  if (c.hasAttribute('data-remplacer')) {
+    remplace = c.getAttribute('data-remplacer');
+    await rendre();
     return;
   }
   if (c.hasAttribute('data-editer')) {
