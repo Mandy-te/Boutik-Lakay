@@ -1,10 +1,11 @@
 /* ============================================================
    Boutique Lakay — écran de gestion
 
-   Trois onglets, dans l'ordre où l'équipe travaille :
-   Comptoir  : les commandes qui attendent un geste, aujourd'hui
-   Catalogue : saisir un produit, ses variantes, ses photos, publier
-   Boutiques : créer un vendeur, le vérifier, fixer son plan
+   Quatre onglets, dans l'ordre où l'équipe travaille :
+   Comptoir   : les commandes qui attendent un geste, aujourd'hui
+   Catalogue  : saisir, corriger, photographier, publier
+   Boutiques  : créer un vendeur, le vérifier, fixer son plan
+   Catégories : ajouter une catégorie sans repasser par le code
 
    Rien ici ne décide d'une règle : tout passe par les fonctions
    de la base (admin.js). Un agent ne peut donc pas valider un
@@ -14,9 +15,10 @@
 let ongletActif = 'comptoir';
 let boutiques = [];
 let lesPlans = [];
-let categories = [];
+let categories = [];          // toutes, actives et inactives
 let boutiqueOuverte = null;
 let produits = [];
+let produitEnEdition = null;  // id du produit dont le formulaire est ouvert
 let occupe = false;
 
 /* ---------- Petits outils -------------------------------- */
@@ -29,7 +31,14 @@ function esc(s) {
 }
 // Les montants circulent en centimes. On n'affiche jamais des centimes bruts.
 function htg(c) { return new Intl.NumberFormat('fr-FR').format(Math.round(c / 100)) + ' HTG'; }
-function enCentimes(gourdes) { return Math.round(parseFloat(String(gourdes).replace(',', '.')) * 100); }
+function enCentimes(gourdes) {
+  const n = parseFloat(String(gourdes == null ? '' : gourdes).replace(',', '.'));
+  return isFinite(n) ? Math.round(n * 100) : 0;
+}
+function enGourdes(centimes) {
+  if (!centimes) return '';
+  return (centimes / 100) % 1 === 0 ? String(centimes / 100) : (centimes / 100).toFixed(2);
+}
 function quand(iso) {
   if (!iso) return '';
   try {
@@ -40,8 +49,7 @@ function quand(iso) {
 function dansCombien(iso) {
   if (!iso) return '';
   const h = Math.round((new Date(iso) - Date.now()) / 3600000);
-  if (h < 0) return 'expiré depuis ' + Math.abs(h) + ' h';
-  return 'expire dans ' + h + ' h';
+  return h < 0 ? 'expiré depuis ' + Math.abs(h) + ' h' : 'expire dans ' + h + ' h';
 }
 function msg(zone, texte, type) {
   const e = el(zone);
@@ -49,6 +57,7 @@ function msg(zone, texte, type) {
     ? '<div class="' + (type === 'ok' ? 'succes' : 'erreur') + '">' + esc(texte) + '</div>'
     : '';
 }
+function val(id) { const e = el(id); return e ? e.value.trim() : ''; }
 
 // Enveloppe commune : empêche le double-clic, remet le bouton en état,
 // et affiche l'erreur de la base telle quelle plutôt qu'un message vague.
@@ -57,12 +66,12 @@ async function agir(bouton, zoneMsg, travail, apres) {
   occupe = true;
   const texte = bouton ? bouton.textContent : '';
   if (bouton) { bouton.disabled = true; bouton.textContent = 'Un instant…'; }
-  msg(zoneMsg, '');
+  if (zoneMsg) msg(zoneMsg, '');
   try {
     const r = await travail();
     if (apres) await apres(r);
   } catch (e) {
-    msg(zoneMsg, e.message || 'Échec de l’opération.', 'ko');
+    if (zoneMsg) msg(zoneMsg, e.message || 'Échec de l’opération.', 'ko');
   } finally {
     occupe = false;
     if (bouton) { bouton.disabled = false; bouton.textContent = texte; }
@@ -88,8 +97,8 @@ function carteCommande(o) {
   let actions = '';
   if (!o.confirme_tel_le) {
     actions =
-      '<p class="note">Appelle le client. Ne laisse pas partir le colis avant sa confirmation : ' +
-      'c’est ce qui évite les colis immobilisés pour rien.</p>' +
+      '<p class="note">Appelle le client. Ne laisse pas partir le colis avant sa ' +
+      'confirmation : c’est ce qui évite les colis immobilisés pour rien.</p>' +
       '<button class="cta" data-tel="' + esc(o.id) + '">Client confirmé par téléphone</button>' +
       '<button class="ghost" data-abandon="' + esc(o.id) + '">Injoignable — annuler</button>';
   } else if (o.statut !== 'au_point_retrait') {
@@ -103,7 +112,8 @@ function carteCommande(o) {
       '<div class="champ"><label for="code-' + esc(o.id) + '">Code de retrait du client</label>' +
         '<input class="codein" id="code-' + esc(o.id) + '" inputmode="numeric" ' +
         'maxlength="6" placeholder="------"></div>' +
-      '<button class="cta vert" data-valider="' + esc(o.id) + '">Encaisser ' + htg(o.total) + ' et remettre</button>' +
+      '<button class="cta vert" data-valider="' + esc(o.id) + '">Encaisser ' +
+        htg(o.total) + ' et remettre</button>' +
       '<button class="ghost" data-abandon="' + esc(o.id) + '">Non retiré — annuler</button>';
   }
 
@@ -143,26 +153,106 @@ async function rendreComptoir() {
   p.innerHTML =
     '<div class="sechead"><h2>Comptoir</h2><span class="eyebrow num">' +
       liste.length + ' en cours</span></div>' +
-    (liste.length === 0
-      ? '<p class="empty">Rien à traiter. Les commandes apparaîtront ici.</p>'
-      : '') +
+    (liste.length === 0 ? '<p class="empty">Rien à traiter. Les commandes apparaîtront ici.</p>' : '') +
     (aRetirer.length
       ? '<div class="sechead"><h2 style="font-size:14px">Au comptoir</h2></div>' +
-        '<div class="pile">' + aRetirer.map(carteCommande).join('') + '</div>'
-      : '') +
+        '<div class="pile">' + aRetirer.map(carteCommande).join('') + '</div>' : '') +
     (aPreparer.length
       ? '<div class="sechead"><h2 style="font-size:14px">À préparer</h2></div>' +
-        '<div class="pile">' + aPreparer.map(carteCommande).join('') + '</div>'
-      : '');
+        '<div class="pile">' + aPreparer.map(carteCommande).join('') + '</div>' : '');
 }
 
 /* ---------- Onglet Catalogue ----------------------------- */
 
+function optionsCategories(choisie) {
+  return categories.filter(function (c) { return c.actif || c.code === choisie; })
+    .map(function (c) {
+      return '<option value="' + esc(c.code) + '"' +
+        (c.code === choisie ? ' selected' : '') + '>' + esc(c.nom_fr) +
+        (c.actif ? '' : ' (désactivée)') + '</option>';
+    }).join('');
+}
+
+function blocMedias(p) {
+  const med = (p.medias || []).slice()
+    .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
+  if (!med.length) {
+    return '<div class="note">Aucun média. Une fiche sans photo ne se vend pas.</div>';
+  }
+  return '<div class="vignettes">' + med.map(function (m) {
+    const url = API.photoUrl(m.chemin);
+    const vid = (m.type || 'image') === 'video';
+    return '<div class="media">' +
+      (vid
+        ? '<video class="vignette" src="' + esc(url) + '" muted playsinline preload="metadata"></video>' +
+          '<span class="vid">VIDÉO</span>'
+        : '<img class="vignette" src="' + esc(url) + '" alt="" loading="lazy">') +
+      '<button class="sup" data-supmedia="' + esc(m.id) + '" data-prod="' + esc(p.id) +
+        '" aria-label="Supprimer ce média" title="Supprimer">×</button>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function blocVariantes(p) {
+  const vs = (p.variantes || []).slice()
+    .sort(function (a, b) { return (a.libelle || '').localeCompare(b.libelle || ''); });
+
+  const lignes = vs.map(function (v) {
+    return '<div class="vrow">' +
+      '<div class="champ lib"><label>Variante</label>' +
+        '<input value="' + esc(v.libelle) + '" data-vlib="' + esc(v.id) + '"></div>' +
+      '<div class="champ"><label>Prix (HTG)</label>' +
+        '<input inputmode="decimal" value="' + esc(enGourdes(v.prix)) +
+        '" placeholder="' + esc(enGourdes(p.prix)) + '" data-vprix="' + esc(v.id) + '"></div>' +
+      '<div class="champ"><label>Stock</label>' +
+        '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
+        '" data-vstock="' + esc(v.id) + '"></div>' +
+      '<button class="sup" data-supvar="' + esc(v.id) + '" data-prod="' + esc(p.id) +
+        '" aria-label="Supprimer la variante">×</button>' +
+    '</div>';
+  }).join('');
+
+  return lignes +
+    '<div class="vrow">' +
+      '<div class="champ lib"><label>Nouvelle variante</label>' +
+        '<input id="nv-lib-' + esc(p.id) + '" placeholder="100 ml, M, 42…"></div>' +
+      '<div class="champ"><label>Prix (HTG)</label>' +
+        '<input id="nv-prix-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
+        esc(enGourdes(p.prix)) + '"></div>' +
+      '<div class="champ"><label>Stock</label>' +
+        '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
+    '</div>' +
+    '<button class="mini" data-ajvar="' + esc(p.id) + '">Ajouter cette variante</button>' +
+    '<p class="note">Prix laissé vide = celui du produit. Un cremas 100 ml et ' +
+      'un 50 ml mettent chacun leur propre prix.</p>';
+}
+
+function formEdition(p) {
+  return '<div class="edit">' +
+    '<div class="champ"><label for="e-nom-' + esc(p.id) + '">Nom de l’article</label>' +
+      '<input id="e-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="e-cat-' + esc(p.id) + '">Catégorie</label>' +
+        '<select id="e-cat-' + esc(p.id) + '">' + optionsCategories(p.categorie) + '</select></div>' +
+      '<div class="champ"><label for="e-prix-' + esc(p.id) + '">Prix de base (HTG)</label>' +
+        '<input id="e-prix-' + esc(p.id) + '" inputmode="decimal" value="' +
+        esc(enGourdes(p.prix)) + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="e-desc-' + esc(p.id) + '">Description complète</label>' +
+      '<textarea id="e-desc-' + esc(p.id) + '" rows="7">' + esc(p.description || '') + '</textarea></div>' +
+    '<label class="coche"><input type="checkbox" id="e-pre-' + esc(p.id) + '"' +
+      (p.prepaiement_exige ? ' checked' : '') + '>Prépaiement exigé</label>' +
+    '<button class="cta" data-enregistrer="' + esc(p.id) + '">Enregistrer les corrections</button>' +
+    '<button class="ghost" data-annuler="' + esc(p.id) + '">Annuler</button>' +
+  '</div>';
+}
+
 function carteProduit(p) {
   const stock = (p.variantes || []).reduce(function (n, v) { return n + (v.stock || 0); }, 0);
-  const photos = (p.medias || []).slice()
-    .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
   const pub = p.statut === 'publie';
+  const cat = categories.filter(function (c) { return c.code === p.categorie; })[0];
+  const enEdition = produitEnEdition === p.id;
+  const prix = API.fourchette({ prix: p.prix, variantes: p.variantes });
 
   return '<div class="bloc">' +
     '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
@@ -170,34 +260,29 @@ function carteProduit(p) {
       esc(pub ? 'En vitrine' : (p.statut === 'suspendu' ? 'Suspendu' : 'Brouillon')) + '</span>' +
       (p.prepaiement_exige ? '<span class="pill warn">Prépaiement</span>' : '') +
     '</div>' +
-    '<div class="ligne"><span>Prix</span><strong class="num">' + htg(p.prix) + '</strong></div>' +
-    '<div class="ligne"><span>Stock total</span><strong class="num">' + stock + '</strong></div>' +
-    (photos.length
-      ? '<div class="vignettes">' + photos.map(function (m) {
-          return '<img class="vignette" src="' + esc(API.photoUrl(m.chemin)) + '" alt="">';
-        }).join('') + '</div>'
-      : '<div class="note">Aucune photo. Une fiche sans photo ne se vend pas.</div>') +
 
-    '<div class="pile" style="padding:0;gap:8px">' +
-      (p.variantes || []).map(function (v) {
-        return '<div class="duo">' +
-          '<div class="champ"><label>' + esc(v.libelle) + '</label>' +
-            '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
-            '" data-stock="' + esc(v.id) + '"></div></div>';
-      }).join('') +
-    '</div>' +
+    (enEdition ? formEdition(p) :
+      '<div class="ligne"><span>Catégorie</span><strong>' +
+        esc(cat ? cat.nom_fr : p.categorie) + '</strong></div>' +
+      '<div class="ligne"><span>Prix</span><strong class="num">' +
+        (prix.min === prix.max ? htg(prix.min) : htg(prix.min) + ' à ' + htg(prix.max)) +
+        '</strong></div>' +
+      '<div class="ligne"><span>Stock total</span><strong class="num">' + stock + '</strong></div>' +
+      (p.description
+        ? '<div class="note">' + esc(p.description) + '</div>'
+        : '<div class="note">Pas de description. L’acheteur ne peut pas toucher ' +
+          'l’article : le texte est tout ce qu’il a.</div>') +
+      '<button class="mini" data-editer="' + esc(p.id) + '">Modifier l’article</button>'
+    ) +
 
-    '<div class="duo">' +
-      '<div class="champ"><label for="v-lib-' + esc(p.id) + '">Nouvelle variante</label>' +
-        '<input id="v-lib-' + esc(p.id) + '" placeholder="M, 42, Brun…"></div>' +
-      '<div class="champ"><label for="v-st-' + esc(p.id) + '">Stock</label>' +
-        '<input id="v-st-' + esc(p.id) + '" type="number" min="0" value="1"></div>' +
-    '</div>' +
-    '<button class="mini" data-var="' + esc(p.id) + '">Ajouter la variante</button>' +
+    blocMedias(p) +
+    '<div class="champ"><label for="ph-' + esc(p.id) + '">Ajouter des photos ou une vidéo</label>' +
+      '<input id="ph-' + esc(p.id) + '" type="file" multiple ' +
+      'accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" ' +
+      'data-photo="' + esc(p.id) + '"></div>' +
+    '<div class="progres" id="prog-' + esc(p.id) + '"></div>' +
 
-    '<div class="champ"><label for="ph-' + esc(p.id) + '">Ajouter une photo</label>' +
-      '<input id="ph-' + esc(p.id) + '" type="file" accept="image/jpeg,image/png,image/webp" ' +
-      'capture="environment" data-photo="' + esc(p.id) + '"></div>' +
+    blocVariantes(p) +
 
     '<div id="msg-' + esc(p.id) + '"></div>' +
     '<div class="rangee">' +
@@ -205,17 +290,25 @@ function carteProduit(p) {
         ? '<button class="ghost" data-depublier="' + esc(p.id) + '">Retirer de la vitrine</button>'
         : '<button class="cta" data-publier="' + esc(p.id) + '">Publier</button>') +
     '</div>' +
+    '<div class="danger"><button class="ghost" data-supprod="' + esc(p.id) + '">' +
+      'Supprimer cet article</button></div>' +
   '</div>';
 }
 
 async function rendreCatalogue() {
   const p = el('panneau');
   const verifiees = boutiques.filter(function (b) { return b.statut === 'verifiee'; });
+  const actives = categories.filter(function (c) { return c.actif; });
 
   if (!verifiees.length) {
     p.innerHTML = '<div class="sechead"><h2>Catalogue</h2></div>' +
       '<p class="empty">Aucune boutique vérifiée. Crée et vérifie un vendeur ' +
       'dans l’onglet Boutiques avant de saisir des produits.</p>';
+    return;
+  }
+  if (!actives.length) {
+    p.innerHTML = '<div class="sechead"><h2>Catalogue</h2></div>' +
+      '<p class="empty">Aucune catégorie active. Ajoute-en une dans l’onglet Catégories.</p>';
     return;
   }
   if (!boutiqueOuverte || !verifiees.filter(function (b) { return b.id === boutiqueOuverte; }).length) {
@@ -235,28 +328,28 @@ async function rendreCatalogue() {
       '</div>' +
 
       '<div class="bloc">' +
-        '<div class="titreligne"><h2>Nouveau produit</h2></div>' +
+        '<div class="titreligne"><h2>Nouvel article</h2></div>' +
         '<div class="champ"><label for="pNom">Nom de l’article</label>' +
-          '<input id="pNom" placeholder="Chemise en lin, homme"></div>' +
+          '<input id="pNom" placeholder="Cremas maison"></div>' +
         '<div class="duo">' +
           '<div class="champ"><label for="pCat">Catégorie</label><select id="pCat">' +
-            categories.map(function (c) {
-              return '<option value="' + esc(c.code) + '">' + esc(c.nom_fr) + '</option>';
-            }).join('') + '</select></div>' +
-          '<div class="champ"><label for="pPrix">Prix en gourdes</label>' +
-            '<input id="pPrix" inputmode="decimal" placeholder="2450"></div>' +
+            optionsCategories(null) + '</select></div>' +
+          '<div class="champ"><label for="pPrix">Prix de base (HTG)</label>' +
+            '<input id="pPrix" inputmode="decimal" placeholder="750"></div>' +
         '</div>' +
-        '<div class="champ"><label for="pDesc">Description</label>' +
-          '<textarea id="pDesc" placeholder="Taille, matière, état…"></textarea></div>' +
+        '<div class="champ"><label for="pDesc">Description complète</label>' +
+          '<textarea id="pDesc" rows="7" placeholder="Tout ce que l’acheteur ne peut pas voir : ' +
+            'contenance, ingrédients, matière, taille réelle, état, durée de conservation, ' +
+            'ce qui est inclus…"></textarea></div>' +
         '<label class="coche"><input type="checkbox" id="pPrepaie">' +
           'Prépaiement exigé (gros montant, le vendeur assume)</label>' +
         '<div id="newProdErr"></div>' +
         '<button class="cta" id="creerProduit">Créer en brouillon</button>' +
-        '<p class="note">Un produit naît en brouillon. Il ne part en vitrine ' +
-          'qu’avec au moins une photo et du stock.</p>' +
+        '<p class="note">L’article naît en brouillon. Tu ajoutes ensuite ses variantes, ' +
+          'ses photos, et tu publies quand c’est prêt. Tout reste modifiable.</p>' +
       '</div>' +
     '</div>' +
-    '<div class="sechead"><h2 style="font-size:14px">Produits de cette boutique</h2>' +
+    '<div class="sechead"><h2 style="font-size:14px">Articles de cette boutique</h2>' +
       '<span class="eyebrow num" id="nbProd"></span></div>' +
     '<div class="pile" id="listeProduits"><p class="empty">…</p></div>';
 
@@ -271,7 +364,7 @@ async function rechargerProduits() {
     if (el('nbProd')) el('nbProd').textContent = produits.length || '';
     zone.innerHTML = produits.length
       ? produits.map(carteProduit).join('')
-      : '<p class="empty">Aucun produit. Crée le premier ci-dessus.</p>';
+      : '<p class="empty">Aucun article. Crée le premier ci-dessus.</p>';
   } catch (e) {
     zone.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
   }
@@ -304,12 +397,9 @@ function carteBoutique(b) {
         }).join('') + '</select></div>' +
     '<div id="msg-' + esc(b.id) + '"></div>' +
     '<div class="rangee">' +
-      (st !== 'verifiee'
-        ? '<button class="mini" data-verifier="' + esc(b.id) + '">Vérifier</button>' : '') +
-      (st === 'verifiee'
-        ? '<button class="mini" data-suspendre="' + esc(b.id) + '">Suspendre</button>' : '') +
-      (st === 'suspendue'
-        ? '<button class="mini" data-verifier="' + esc(b.id) + '">Réactiver</button>' : '') +
+      (st !== 'verifiee' ? '<button class="mini" data-verifier="' + esc(b.id) + '">' +
+        (st === 'suspendue' ? 'Réactiver' : 'Vérifier') + '</button>' : '') +
+      (st === 'verifiee' ? '<button class="mini" data-suspendre="' + esc(b.id) + '">Suspendre</button>' : '') +
     '</div>' +
     (st === 'en_attente'
       ? '<p class="note">Vérifie la patente et la pièce d’identité avant de ' +
@@ -318,8 +408,7 @@ function carteBoutique(b) {
 }
 
 async function rendreBoutiques() {
-  const p = el('panneau');
-  p.innerHTML =
+  el('panneau').innerHTML =
     '<div class="sechead"><h2>Boutiques</h2><span class="eyebrow num">' +
       (boutiques.length || '') + '</span></div>' +
     '<div class="pile">' +
@@ -334,7 +423,7 @@ async function rendreBoutiques() {
             '<input id="bRepere" placeholder="Rue 10 J, près de…"></div>' +
         '</div>' +
         '<div class="champ"><label for="bDesc">Ce que vend ce vendeur</label>' +
-          '<textarea id="bDesc"></textarea></div>' +
+          '<textarea id="bDesc" rows="4"></textarea></div>' +
         '<div id="newShopErr"></div>' +
         '<button class="cta" id="creerBoutique">Créer en attente</button>' +
         '<p class="note">La boutique est créée à ton nom et reste invisible ' +
@@ -347,6 +436,64 @@ async function rendreBoutiques() {
     '</div>';
 }
 
+/* ---------- Onglet Catégories ---------------------------- */
+
+function carteCategorie(c) {
+  const n = produits.filter(function (p) { return p.categorie === c.code; }).length;
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(c.nom_fr) + '</h2>' +
+      '<span class="pill ' + (c.actif ? 'ok' : 'gris') + '">' +
+      esc(c.actif ? 'Active' : 'Désactivée') + '</span></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="c-fr-' + esc(c.code) + '">Nom en français</label>' +
+        '<input id="c-fr-' + esc(c.code) + '" value="' + esc(c.nom_fr) + '"></div>' +
+      '<div class="champ"><label for="c-ht-' + esc(c.code) + '">Nom en créole</label>' +
+        '<input id="c-ht-' + esc(c.code) + '" value="' + esc(c.nom_ht) + '"></div>' +
+      '<div class="champ"><label for="c-ord-' + esc(c.code) + '">Ordre</label>' +
+        '<input id="c-ord-' + esc(c.code) + '" class="num" type="number" value="' +
+        (c.ordre || 0) + '"></div>' +
+    '</div>' +
+    '<div class="ligne"><span>Code interne</span><span class="num">' + esc(c.code) + '</span></div>' +
+    '<div id="msg-cat-' + esc(c.code) + '"></div>' +
+    '<div class="rangee">' +
+      '<button class="mini" data-majcat="' + esc(c.code) + '">Enregistrer</button>' +
+      '<button class="mini" data-basculecat="' + esc(c.code) + '" data-actif="' +
+        (c.actif ? '0' : '1') + '">' + (c.actif ? 'Désactiver' : 'Réactiver') + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function rendreCategories() {
+  el('panneau').innerHTML =
+    '<div class="sechead"><h2>Catégories</h2><span class="eyebrow num">' +
+      (categories.length || '') + '</span></div>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouvelle catégorie</h2></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="cNomFr">Nom en français</label>' +
+            '<input id="cNomFr" placeholder="Agroalimentaire"></div>' +
+          '<div class="champ"><label for="cNomHt">Nom en créole</label>' +
+            '<input id="cNomHt" placeholder="Manje"></div>' +
+        '</div>' +
+        '<div class="champ"><label for="cOrdre">Ordre d’affichage</label>' +
+          '<input id="cOrdre" class="num" type="number" value="9"></div>' +
+        '<div id="newCatErr"></div>' +
+        '<button class="cta" id="creerCategorie">Ajouter la catégorie</button>' +
+        '<p class="note">Elle apparaît aussitôt dans l’app des acheteurs, sans ' +
+          'rien toucher au code. Laisse le créole vide si tu ne l’as pas encore : ' +
+          'le nom français sera repris.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      (categories.length ? categories.map(carteCategorie).join('')
+        : '<p class="empty">Aucune catégorie.</p>') +
+    '</div>' +
+    '<p class="note">Une catégorie ne se supprime pas : des articles y sont ' +
+      'rattachés et leur historique de vente aussi. La désactiver la retire de ' +
+      'l’app sans rien casser.</p>';
+}
+
 /* ---------- Navigation ----------------------------------- */
 
 async function rendre() {
@@ -356,44 +503,47 @@ async function rendre() {
   if (ongletActif === 'comptoir') await rendreComptoir();
   if (ongletActif === 'catalogue') await rendreCatalogue();
   if (ongletActif === 'boutiques') await rendreBoutiques();
+  if (ongletActif === 'categories') await rendreCategories();
 }
 
 async function rechargerBase() {
   const r = await Promise.all([
     ADMIN.toutesBoutiques().catch(function () { return []; }),
     ADMIN.plans().catch(function () { return []; }),
-    API.categories().catch(function () { return { data: [] }; })
+    ADMIN.toutesCategories().catch(function () { return []; })
   ]);
   boutiques = r[0];
   lesPlans = r[1];
-  categories = r[2].data || [];
+  categories = r[2];
 }
 
 function montrer(vue) {
-  ['login', 'refus', 'app'].forEach(function (v) {
-    el('vue-' + v).hidden = (v !== vue);
-  });
+  ['login', 'refus', 'app'].forEach(function (v) { el('vue-' + v).hidden = (v !== vue); });
   el('sortir').hidden = (vue !== 'app');
 }
 
-/* ---------- Événements ----------------------------------- */
+/* ---------- Événements : clics ---------------------------- */
 
 document.addEventListener('click', async function (ev) {
-  const c = ev.target;
+  const c = ev.target.closest ? ev.target.closest('button') : null;
+  const t = ev.target;
 
-  if (c.id === 'entrer') {
-    await agir(c, 'loginErr', function () {
-      return ADMIN.connexion(el('email').value.trim(), el('mdp').value);
+  if (t.id === 'entrer') {
+    await agir(t, 'loginErr', function () {
+      return ADMIN.connexion(val('email'), el('mdp').value);
     }, demarrerSession);
     return;
   }
-  if (c.id === 'sortir' || c.id === 'refusSortir') {
+  if (t.id === 'sortir' || t.id === 'refusSortir') {
     await ADMIN.deconnexion();
     location.reload();
     return;
   }
+  if (!c) return;
+
   if (c.classList.contains('ong')) {
     ongletActif = c.getAttribute('data-ong');
+    produitEnEdition = null;
     await rendre();
     return;
   }
@@ -415,7 +565,7 @@ document.addEventListener('click', async function (ev) {
     const code = champ ? champ.value.trim() : '';
     if (code.length !== 6) { msg('msg-' + id, 'Entre les 6 chiffres du code du client.', 'ko'); return; }
     await agir(c, 'msg-' + id, function () { return ADMIN.validerRetrait(id, code); },
-      async function (r) {
+      function (r) {
         msg('msg-' + id, 'Encaissé ' + htg(r.total) +
           (r.en_retard ? ' (retrait en retard)' : '') + '. Colis remis.', 'ok');
         setTimeout(rendreComptoir, 1400);
@@ -424,13 +574,12 @@ document.addEventListener('click', async function (ev) {
   }
   if (c.hasAttribute('data-abandon')) {
     const id = c.getAttribute('data-abandon');
-    // Pas de boîte de dialogue : on affiche une confirmation dans la page,
-    // parce qu'un abandon remet le stock et compte contre le client.
+    // Deux appuis : l'abandon remet le stock et compte contre le client.
     if (c.dataset.sur !== '1') {
       c.dataset.sur = '1';
       c.textContent = 'Confirmer l’annulation';
-      msg('msg-' + id, 'Les articles retournent en stock et un abandon est ' +
-        'compté au client. Appuie encore pour confirmer.', 'ko');
+      msg('msg-' + id, 'Les articles retournent en stock et un abandon est compté ' +
+        'au client. Appuie encore pour confirmer.', 'ko');
       return;
     }
     await agir(c, 'msg-' + id, function () { return ADMIN.marquerAbandon(id, 'Non retiré'); },
@@ -441,16 +590,16 @@ document.addEventListener('click', async function (ev) {
     return;
   }
 
-  /* --- Catalogue --- */
+  /* --- Catalogue : création --- */
   if (c.id === 'creerProduit') {
-    const nom = el('pNom').value.trim();
-    const prix = enCentimes(el('pPrix').value);
+    const nom = val('pNom');
+    const prix = enCentimes(val('pPrix'));
     if (!nom) { msg('newProdErr', 'Donne un nom à l’article.', 'ko'); return; }
-    if (!prix || prix <= 0) { msg('newProdErr', 'Indique un prix en gourdes.', 'ko'); return; }
+    if (prix <= 0) { msg('newProdErr', 'Indique un prix de base en gourdes.', 'ko'); return; }
     await agir(c, 'newProdErr', function () {
       return ADMIN.creerProduit({
         boutique: boutiqueOuverte, categorie: el('pCat').value,
-        nom: nom, prix: prix, description: el('pDesc').value.trim(),
+        nom: nom, prix: prix, description: val('pDesc'),
         prepaiement_exige: el('pPrepaie').checked
       });
     }, async function () {
@@ -460,14 +609,67 @@ document.addEventListener('click', async function (ev) {
     });
     return;
   }
-  if (c.hasAttribute('data-var')) {
-    const id = c.getAttribute('data-var');
-    const lib = el('v-lib-' + id).value.trim();
-    const st = el('v-st-' + id).value;
-    await agir(c, 'msg-' + id, function () { return ADMIN.ajouterVariante(id, lib, st, 0); },
+
+  /* --- Catalogue : modification --- */
+  if (c.hasAttribute('data-editer')) {
+    produitEnEdition = c.getAttribute('data-editer');
+    await rechargerProduits();
+    return;
+  }
+  if (c.hasAttribute('data-annuler')) {
+    produitEnEdition = null;
+    await rechargerProduits();
+    return;
+  }
+  if (c.hasAttribute('data-enregistrer')) {
+    const id = c.getAttribute('data-enregistrer');
+    const nom = val('e-nom-' + id);
+    const prix = enCentimes(val('e-prix-' + id));
+    if (!nom) { msg('msg-' + id, 'Le nom ne peut pas être vide.', 'ko'); return; }
+    if (prix <= 0) { msg('msg-' + id, 'Le prix de base doit être supérieur à zéro.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () {
+      return ADMIN.majProduit(id, {
+        nom: nom, prix: prix,
+        categorie: el('e-cat-' + id).value,
+        description: val('e-desc-' + id) || null,
+        prepaiement_exige: el('e-pre-' + id).checked
+      });
+    }, async function () { produitEnEdition = null; await rechargerProduits(); });
+    return;
+  }
+
+  /* --- Catalogue : variantes --- */
+  if (c.hasAttribute('data-ajvar')) {
+    const id = c.getAttribute('data-ajvar');
+    const lib = val('nv-lib-' + id);
+    const prix = enCentimes(val('nv-prix-' + id));
+    const st = val('nv-stock-' + id);
+    await agir(c, 'msg-' + id, function () {
+      return ADMIN.ajouterVariante(id, lib, prix, st);
+    }, rechargerProduits);
+    return;
+  }
+  if (c.hasAttribute('data-supvar')) {
+    const vid = c.getAttribute('data-supvar');
+    const pid = c.getAttribute('data-prod');
+    await agir(c, 'msg-' + pid, function () { return ADMIN.supprimerVariante(vid); },
       rechargerProduits);
     return;
   }
+
+  /* --- Catalogue : médias --- */
+  if (c.hasAttribute('data-supmedia')) {
+    const mid = c.getAttribute('data-supmedia');
+    const pid = c.getAttribute('data-prod');
+    const prod = produits.filter(function (p) { return p.id === pid; })[0];
+    const m = prod && (prod.medias || []).filter(function (x) { return x.id === mid; })[0];
+    if (!m) return;
+    await agir(c, 'msg-' + pid, function () { return ADMIN.supprimerMedia(m); },
+      rechargerProduits);
+    return;
+  }
+
+  /* --- Catalogue : publication et suppression --- */
   if (c.hasAttribute('data-publier')) {
     const id = c.getAttribute('data-publier');
     await agir(c, 'msg-' + id, function () { return ADMIN.publier(id); }, rechargerProduits);
@@ -478,17 +680,29 @@ document.addEventListener('click', async function (ev) {
     await agir(c, 'msg-' + id, function () { return ADMIN.depublier(id); }, rechargerProduits);
     return;
   }
+  if (c.hasAttribute('data-supprod')) {
+    const id = c.getAttribute('data-supprod');
+    if (c.dataset.sur !== '1') {
+      c.dataset.sur = '1';
+      c.textContent = 'Confirmer la suppression';
+      msg('msg-' + id, 'L’article, ses variantes et ses médias seront supprimés. ' +
+        'Appuie encore pour confirmer.', 'ko');
+      return;
+    }
+    await agir(c, 'msg-' + id, function () { return ADMIN.supprimerProduit(id); },
+      async function () { produitEnEdition = null; await rechargerProduits(); });
+    return;
+  }
 
   /* --- Boutiques --- */
   if (c.id === 'creerBoutique') {
-    const nom = el('bNom').value.trim();
-    const commune = el('bCommune').value.trim();
+    const nom = val('bNom');
+    const commune = val('bCommune');
     if (!nom || !commune) { msg('newShopErr', 'Le nom et la commune sont nécessaires.', 'ko'); return; }
     await agir(c, 'newShopErr', function () {
       return ADMIN.creerBoutique({
         nom: nom, commune: commune,
-        adresse_repere: el('bRepere').value.trim(),
-        description: el('bDesc').value.trim()
+        adresse_repere: val('bRepere'), description: val('bDesc')
       });
     }, async function () { await rechargerBase(); await rendreBoutiques(); });
     return;
@@ -505,13 +719,53 @@ document.addEventListener('click', async function (ev) {
       async function () { await rechargerBase(); await rendreBoutiques(); });
     return;
   }
+
+  /* --- Catégories --- */
+  if (c.id === 'creerCategorie') {
+    const fr = val('cNomFr');
+    if (!fr) { msg('newCatErr', 'Donne un nom à la catégorie.', 'ko'); return; }
+    await agir(c, 'newCatErr', function () {
+      return ADMIN.creerCategorie({ nom_fr: fr, nom_ht: val('cNomHt'), ordre: val('cOrdre') });
+    }, async function () {
+      el('cNomFr').value = ''; el('cNomHt').value = '';
+      await rechargerBase();
+      await rendreCategories();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-majcat')) {
+    const code = c.getAttribute('data-majcat');
+    const fr = val('c-fr-' + code);
+    if (!fr) { msg('msg-cat-' + code, 'Le nom français ne peut pas être vide.', 'ko'); return; }
+    await agir(c, 'msg-cat-' + code, function () {
+      return ADMIN.majCategorie(code, {
+        nom_fr: fr,
+        nom_ht: val('c-ht-' + code) || fr,
+        ordre: parseInt(val('c-ord-' + code), 10) || 0
+      });
+    }, async function () {
+      msg('msg-cat-' + code, 'Enregistré.', 'ok');
+      await rechargerBase();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-basculecat')) {
+    const code = c.getAttribute('data-basculecat');
+    const actif = c.getAttribute('data-actif') === '1';
+    await agir(c, 'msg-cat-' + code, function () { return ADMIN.basculerCategorie(code, actif); },
+      async function () { await rechargerBase(); await rendreCategories(); });
+    return;
+  }
 });
+
+/* ---------- Événements : champs --------------------------- */
 
 document.addEventListener('change', async function (ev) {
   const c = ev.target;
 
   if (c.id === 'selBoutique') {
     boutiqueOuverte = c.value;
+    produitEnEdition = null;
     await rechargerProduits();
     return;
   }
@@ -519,34 +773,67 @@ document.addEventListener('change', async function (ev) {
     const id = c.getAttribute('data-plan');
     if (!c.value) return;
     await agir(null, 'msg-' + id, function () { return ADMIN.definirPlan(id, c.value); },
-      async function () {
-        msg('msg-' + id, 'Plan enregistré.', 'ok');
-        await rechargerBase();
-      });
+      async function () { msg('msg-' + id, 'Plan enregistré.', 'ok'); await rechargerBase(); });
     return;
   }
-  if (c.hasAttribute('data-stock')) {
-    const vid = c.getAttribute('data-stock');
-    await agir(null, null, function () { return ADMIN.majStock(vid, c.value); });
+
+  // Variantes : on enregistre au fil de la saisie, sans bouton.
+  if (c.hasAttribute('data-vstock')) {
+    await agir(null, null, function () {
+      return ADMIN.majVariante(c.getAttribute('data-vstock'),
+        { stock: Math.max(0, parseInt(c.value, 10) || 0) });
+    });
     return;
   }
+  if (c.hasAttribute('data-vlib')) {
+    const lib = c.value.trim();
+    if (!lib) return;
+    await agir(null, null, function () {
+      return ADMIN.majVariante(c.getAttribute('data-vlib'), { libelle: lib });
+    });
+    return;
+  }
+  if (c.hasAttribute('data-vprix')) {
+    const cts = enCentimes(c.value);
+    await agir(null, null, function () {
+      return ADMIN.majVariante(c.getAttribute('data-vprix'), { prix: cts > 0 ? cts : null });
+    });
+    return;
+  }
+
+  /* --- Médias : plusieurs fichiers, un par un --- */
   if (c.hasAttribute('data-photo')) {
     const id = c.getAttribute('data-photo');
-    const f = c.files && c.files[0];
-    if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      msg('msg-' + id, 'Photo trop lourde : 5 Mo maximum.', 'ko');
+    const fichiers = Array.prototype.slice.call(c.files || []);
+    if (!fichiers.length) return;
+
+    const prod = produits.filter(function (p) { return p.id === id; })[0] || { medias: [] };
+    const dejaImg = (prod.medias || []).filter(function (m) { return (m.type || 'image') === 'image'; }).length;
+    const dejaVid = (prod.medias || []).filter(function (m) { return m.type === 'video'; }).length;
+    const prog = el('prog-' + id);
+
+    msg('msg-' + id, '');
+    await agir(null, 'msg-' + id, function () {
+      return ADMIN.televerserPlusieurs(id, fichiers, dejaImg, dejaVid,
+        function (i, total, nom) {
+          if (prog) prog.textContent = 'Envoi ' + i + ' sur ' + total + ' — ' + nom;
+        });
+    }, async function (r) {
+      if (prog) prog.textContent = '';
       c.value = '';
-      return;
-    }
-    msg('msg-' + id, 'Envoi de la photo…', 'ok');
-    await agir(null, 'msg-' + id, function () { return ADMIN.televerserPhoto(id, f, true); },
-      async function () { c.value = ''; await rechargerProduits(); });
+      if (r.erreurs.length) {
+        msg('msg-' + id, (r.envoyes ? r.envoyes + ' envoyé(s). ' : '') +
+          r.erreurs.join(' · '), 'ko');
+      } else {
+        msg('msg-' + id, r.envoyes + ' média(s) ajouté(s).', 'ok');
+      }
+      await rechargerProduits();
+    });
     return;
   }
 });
 
-// Entrée dans le champ mot de passe = connexion.
+// Entrée dans les champs de connexion = se connecter.
 document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter' && (ev.target.id === 'mdp' || ev.target.id === 'email')) {
     const b = el('entrer');
@@ -577,7 +864,6 @@ async function demarrerSession() {
     montrer('login');
     return;
   }
-  // Une session déjà ouverte évite de retaper le mot de passe à chaque fois.
   try {
     const { data } = await API.sb().auth.getSession();
     if (data && data.session && !data.session.user.is_anonymous) {

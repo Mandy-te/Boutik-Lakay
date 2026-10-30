@@ -111,9 +111,11 @@ const API = (function () {
 
   /* ---------- Référentiels --------------------------------- */
 
+  // Les catégories vivent en base : l'équipe en ajoute depuis l'écran de
+  // gestion et elles apparaissent ici sans toucher au code.
   function categories() {
     return avecCache('categories', function () {
-      return sb().from('categories').select('*').order('ordre');
+      return sb().from('categories').select('*').eq('actif', true).order('ordre');
     });
   }
 
@@ -137,8 +139,29 @@ const API = (function () {
   const CHAMPS_PRODUIT =
     'id, nom, description, prix, categorie, prepaiement_exige, mis_en_avant_jusqu_au, ' +
     'boutique:boutiques!inner(id, nom, slug, commune, statut), ' +
-    'variantes(id, libelle, stock, supplement), ' +
-    'medias(chemin, ordre)';
+    'variantes(id, libelle, stock, prix), ' +
+    'medias(chemin, ordre, type, mime)';
+
+  // Prix réellement payé pour une variante : le sien s'il existe, sinon
+  // celui du produit. Une seule définition, utilisée partout.
+  function prixVariante(produit, variante) {
+    if (variante && variante.prix) return variante.prix;
+    return produit.prix;
+  }
+
+  // Fourchette affichée sur une fiche dont les variantes n'ont pas le
+  // même prix : « à partir de » plutôt qu'un prix qui change au clic.
+  function fourchette(produit) {
+    const vs = (produit.variantes || []).filter(function (v) { return v.stock > 0; });
+    if (!vs.length) return { min: produit.prix, max: produit.prix };
+    let min = Infinity, max = 0;
+    vs.forEach(function (v) {
+      const p = prixVariante(produit, v);
+      if (p < min) min = p;
+      if (p > max) max = p;
+    });
+    return { min: min, max: max };
+  }
 
   function produits(filtres) {
     const f = filtres || {};
@@ -168,11 +191,17 @@ const API = (function () {
     });
   }
 
-  // URL publique d'une photo rangée dans le bucket Storage.
+  // URL publique d'un média rangé dans le bucket Storage.
   function photoUrl(chemin) {
     if (!chemin) return null;
     const { data } = sb().storage.from('produits').getPublicUrl(chemin);
     return data ? data.publicUrl : null;
+  }
+
+  function medias(produit, type) {
+    return (produit.medias || [])
+      .filter(function (m) { return !type || (m.type || 'image') === type; })
+      .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
   }
 
   /* ---------- Commandes -----------------------------------
@@ -265,6 +294,7 @@ const API = (function () {
     session: session, monId: monId, profil: profil, majProfil: majProfil,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,
+    prixVariante: prixVariante, fourchette: fourchette, medias: medias,
     creerCommande: creerCommande, codeLocal: codeLocal,
     mesCommandes: mesCommandes, commande: commande,
     maBoutique: maBoutique, commandesBoutique: commandesBoutique,

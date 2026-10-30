@@ -41,7 +41,9 @@ const T = {
     orderOf:'Commande du', offline:'Hors ligne — affichage du dernier catalogue connu.',
     stale:'Catalogue peut-être ancien. Reconnectez-vous pour le rafraîchir.',
     loadErr:'Impossible de charger. Vérifiez votre connexion.',
-    zone:'Zone de service'
+    zone:'Zone de service',
+    from:'à partir de', video:'Vidéo de l\u2019article',
+    videoData:'La vidéo ne se télécharge que si vous appuyez sur lecture.'
   },
   ht: {
     search:'Chèche yon atik', boost:'Mete devan', all:'Tout atik yo',
@@ -75,7 +77,9 @@ const T = {
     orderOf:'Kòmand', offline:'Pa gen entènèt — n ap montre dènye katalòg nou te genyen.',
     stale:'Katalòg la ka vye. Konekte pou rafrechi l.',
     loadErr:'Nou pa ka chaje. Tcheke koneksyon w.',
-    zone:'Zòn sèvis'
+    zone:'Zòn sèvis',
+    from:'apati de', video:'Videyo atik la',
+    videoData:'Videyo a ap chaje sèlman si w peze bouton lekti a.'
   }
 };
 
@@ -113,11 +117,18 @@ function el(id) { return document.getElementById(id); }
 function glyphe(c) { return c === 'bote' ? 'g-bote' : (c === 'elek' ? 'g-elek' : 'g-rad'); }
 function teinte(c) { return c === 'bote' ? 't-bote' : (c === 'elek' ? 't-elek' : 't-rad'); }
 
+// Première photo seulement : une vidéo ne fait pas une vignette.
 function photo(p) {
-  if (!p || !p.medias || !p.medias.length) return null;
-  const tri = p.medias.slice().sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
-  return API.photoUrl(tri[0].chemin);
+  if (!p) return null;
+  const img = API.medias(p, 'image');
+  return img.length ? API.photoUrl(img[0].chemin) : null;
 }
+function videoDe(p) {
+  const v = API.medias(p, 'video');
+  return v.length ? API.photoUrl(v[0].chemin) : null;
+}
+// Prix réellement payé : celui de la variante s'il existe.
+function prixDe(p, v) { return API.prixVariante(p, v); }
 function visuel(p, classe) {
   const url = photo(p);
   if (url) return '<img src="' + esc(url) + '" alt="' + esc(p.nom) + '" loading="lazy">';
@@ -183,6 +194,10 @@ function majBandeau() {
 
 function carte(p) {
   const rupture = stockTotal(p) <= 0;
+  const f = API.fourchette(p);
+  // Variantes à prix différents : « à partir de », plutôt qu'un prix
+  // affiché ici qui changerait sur la fiche.
+  const prix = f.min === f.max ? htg(f.min) : t('from') + ' ' + htg(f.min);
   return '<button class="card" data-prod="' + esc(p.id) + '">' +
     '<span class="tile ' + teinte(p.categorie) + '">' +
       (enAvant(p) ? '<span class="boost">' + esc(t('boost')) + '</span>' : '') +
@@ -190,8 +205,8 @@ function carte(p) {
     '<span class="cbody">' +
       '<span class="cname">' + esc(p.nom) + '</span>' +
       '<span class="cshop">' + esc(p.boutique ? p.boutique.nom : '') + '</span>' +
-      '<span class="cprice num">' + htg(p.prix) + '</span>' +
-      '<span class="cusd num">' + usd(p.prix) +
+      '<span class="cprice num">' + prix + '</span>' +
+      '<span class="cusd num">' + usd(f.min) +
         (rupture ? ' · ' + esc(t('soldout')) : '') + '</span>' +
     '</span></button>';
 }
@@ -283,33 +298,67 @@ function blocPaiement() {
   return h;
 }
 
+// Variante actuellement choisie sur la fiche ouverte.
+let varianteChoisie = null;
+
+function majPrixAffiche() {
+  const p = prodCourant;
+  if (!p) return;
+  const vars = (p.variantes || []).filter(function (v) { return v.stock > 0; });
+  const v = vars.filter(function (x) { return x.id === varianteChoisie; })[0] || vars[0] || null;
+  const prix = prixDe(p, v);
+  const zp = el('zonePrix'), zu = el('zoneUsd'), zs = el('zoneStock');
+  if (zp) zp.textContent = htg(prix);
+  if (zu) zu.textContent = usd(prix);
+  if (zs) zs.textContent = v ? String(v.stock) : '0';
+}
+
 function rendreProduit() {
   const p = prodCourant;
   if (!p) return;
   el('prodBack').textContent = t('back');
   const vars = (p.variantes || []).filter(function (v) { return v.stock > 0; });
   const rupture = stockTotal(p) <= 0;
+  varianteChoisie = vars.length ? vars[0].id : null;
+  const vidUrl = videoDe(p);
+
+  // Le libellé montre le prix quand les variantes n'ont pas le même :
+  // « 100 ml » et « 50 ml » n'ont de sens qu'avec leur prix à côté.
+  const prixDifferents = vars.length > 1 &&
+    vars.some(function (v) { return prixDe(p, v) !== prixDe(p, vars[0]); });
 
   let vh = '';
-  if (vars.length > 1 || (vars.length === 1 && vars[0].libelle !== '—')) {
+  if (vars.length) {
     vh = '<div><div class="vlabel">' + esc(t('size')) + '</div><div class="variants">' +
       vars.map(function (v, i) {
         return '<button class="chip" data-var="' + esc(v.id) + '" aria-pressed="' + (i === 0) + '">' +
-          esc(v.libelle) + '</button>';
+          esc(v.libelle) +
+          (prixDifferents ? ' · ' + htg(prixDe(p, v)) : '') + '</button>';
       }).join('') + '</div></div>';
   }
 
   el('prod').innerHTML =
     '<div class="phero ' + teinte(p.categorie) + '">' + visuel(p) + '</div>' +
     '<h1 class="pname">' + esc(p.nom) + '</h1>' +
-    '<div class="prow"><span class="pprice num">' + htg(p.prix) + '</span>' +
-      '<span class="cusd num">' + usd(p.prix) + '</span></div>' +
+    '<div class="prow"><span class="pprice num" id="zonePrix">' +
+      htg(prixDe(p, vars[0])) + '</span>' +
+      '<span class="cusd num" id="zoneUsd">' + usd(prixDe(p, vars[0])) + '</span></div>' +
     '<p class="note" style="padding:0">' + esc(t('by')) + ' <strong>' +
       esc(p.boutique ? p.boutique.nom : '') + '</strong>' +
       (p.boutique ? ' · ' + esc(p.boutique.commune) : '') +
-      ' · <span class="num">' + stockTotal(p) + '</span> ' + esc(t('stock')) + '</p>' +
-    (p.description ? '<p class="note" style="padding:0">' + esc(p.description) + '</p>' : '') +
+      ' · <span class="num" id="zoneStock">' +
+      (vars[0] ? vars[0].stock : 0) + '</span> ' + esc(t('stock')) + '</p>' +
+    (p.description
+      ? '<p class="desc">' + esc(p.description) + '</p>' : '') +
     vh +
+    // preload="metadata" : la vidéo ne se télécharge pas toute seule.
+    // Sur un forfait haïtien, un téléchargement non demandé est un vol.
+    (vidUrl
+      ? '<div><div class="vlabel">' + esc(t('video')) + '</div>' +
+        '<video class="pvideo" src="' + esc(vidUrl) + '" controls playsinline ' +
+        'preload="metadata"' + (photo(p) ? ' poster="' + esc(photo(p)) + '"' : '') + '></video>' +
+        '<p class="note" style="padding:4px 0 0">' + esc(t('videoData')) + '</p></div>'
+      : '') +
     (p.prepaiement_exige
       ? '<div class="warnbox">' + esc(t('prepay')) + '</div>'
       : blocPaiement()) +
@@ -640,8 +689,7 @@ document.addEventListener('click', function (ev) {
     const p = prodCourant;
     if (!p) return;
     const dispo = (p.variantes || []).filter(function (v) { return v.stock > 0; });
-    const choisi = document.querySelector('[data-var][aria-pressed="true"]');
-    const vid = choisi ? choisi.getAttribute('data-var') : (dispo[0] && dispo[0].id);
+    const vid = varianteChoisie || (dispo[0] && dispo[0].id);
     if (!vid) return;
     const v = dispo.filter(function (x) { return x.id === vid; })[0] || dispo[0];
 
@@ -651,7 +699,7 @@ document.addEventListener('click', function (ev) {
     } else {
       panier.push({
         variante: v.id, quantite: 1, libelle: v.libelle,
-        prix: p.prix + (v.supplement || 0), nom: p.nom, categorie: p.categorie,
+        prix: prixDe(p, v), nom: p.nom, categorie: p.categorie,
         boutique: p.boutique ? p.boutique.nom : '', boutiqueId: p.boutique ? p.boutique.id : '',
         photo: photo(p), stock: v.stock
       });
@@ -689,6 +737,8 @@ document.addEventListener('click', function (ev) {
     Array.prototype.forEach.call(document.querySelectorAll('[data-var]'), function (b) {
       b.setAttribute('aria-pressed', b === n);
     });
+    varianteChoisie = n.getAttribute('data-var');
+    majPrixAffiche();   // le prix suit la variante choisie
     return;
   }
   if (n.hasAttribute('data-inc')) {

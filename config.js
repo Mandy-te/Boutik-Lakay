@@ -41,6 +41,20 @@ const CONFIG = {
     abandonsAvantPrepaiement: 3  // au 3e, le compte doit prépayer
   },
 
+  /* --- Médias ---------------------------------------------- */
+  // Les limites sont ici, pas dans le code : tu les changes sans me rappeler.
+  //
+  // Pourquoi une limite sur la vidéo : ce n'est pas le stockage qui coûte,
+  // c'est la data de l'acheteur. Une vidéo de 30 Mo sur une fiche produit,
+  // c'est une recharge brûlée pour regarder un article. Côté acheteur la
+  // vidéo ne se télécharge jamais toute seule, il faut appuyer sur lecture.
+  medias: {
+    photosMax: 8,        // par produit
+    videosMax: 2,        // par produit
+    moMax: 30,           // par fichier, en mégaoctets
+    videoSecondesMax: 20 // au-delà, l'envoi est refusé avec un message clair
+  },
+
   /* --- Cache hors-ligne ------------------------------------ */
   // La data mobile est chère et le réseau coupe. Le catalogue est relu
   // depuis le cache quand la requête échoue, et rafraîchi dès que possible.

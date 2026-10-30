@@ -103,8 +103,26 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .ligne{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink-soft)}
 .ligne strong{color:var(--ink);font-weight:600}
 .tel{font-size:15px;font-weight:700;letter-spacing:.02em}
-.vignettes{display:flex;gap:7px;flex-wrap:wrap}
-.vignette{width:58px;height:58px;border-radius:8px;object-fit:cover;border:1px solid var(--line)}
+.vignettes{display:flex;gap:8px;flex-wrap:wrap}
+.media{position:relative;width:66px;height:66px;flex:none}
+.vignette{width:66px;height:66px;border-radius:8px;object-fit:cover;border:1px solid var(--line);background:var(--bg);display:block}
+.media .sup{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;
+  border:1px solid var(--line);background:var(--surface);color:var(--hot);
+  font-size:14px;font-weight:700;line-height:1;display:grid;place-items:center;padding:0}
+.media .vid{position:absolute;bottom:3px;left:3px;background:var(--ink);color:var(--bg);
+  font-size:8.5px;font-weight:700;letter-spacing:.06em;padding:2px 4px;border-radius:3px}
+.progres{font-size:12.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+
+/* Lignes de variantes : libellé, prix, stock, suppression. */
+.vrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:10px}
+.vrow .champ{flex:1;min-width:88px}
+.vrow .champ.lib{flex:2;min-width:110px}
+.vrow .sup{border:1px solid var(--line);background:var(--surface);color:var(--hot);
+  border-radius:9px;padding:11px 13px;font-size:13px;font-weight:600;flex:none}
+.edit{background:var(--bg);border:1px solid var(--line);border-radius:11px;
+  padding:12px;display:flex;flex-direction:column;gap:11px}
+.danger{border-top:1px solid var(--line);padding-top:11px}
 .retard{background:var(--warn-soft);border-radius:10px;padding:10px 12px;font-size:12.5px}
 .erreur{background:color-mix(in srgb, var(--hot) 12%, transparent);border-radius:10px;padding:11px 12px;font-size:13px}
 .succes{background:color-mix(in srgb, var(--ok) 14%, transparent);border-radius:10px;padding:11px 12px;font-size:13px}
@@ -157,6 +175,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <button class="ong" role="tab" data-ong="comptoir" aria-selected="true">Comptoir</button>
       <button class="ong" role="tab" data-ong="catalogue" aria-selected="false">Catalogue</button>
       <button class="ong" role="tab" data-ong="boutiques" aria-selected="false">Boutiques</button>
+      <button class="ong" role="tab" data-ong="categories" aria-selected="false">Catégories</button>
     </div>
     <div id="panneau"></div>
   </section>
