@@ -283,6 +283,22 @@ function carteBoutique(b) {
           return '<option value="' + esc(p.code) + '"' + (plan === p.code ? ' selected' : '') + '>' +
             esc(p.nom) + ' — ' + (p.commission_bps / 100) + ' % de commission</option>';
         }).join('') + '</select></div>' +
+    // Sans plan, c'est le tarif du plan gratuit qui s'applique en silence.
+    // Mieux vaut le dire que de le laisser découvrir au premier règlement.
+    (!plan
+      ? '<p class="note" style="color:var(--warn)">Aucun plan : la commission du ' +
+        'plan gratuit s’appliquera (' + (tauxGratuit() / 100) + ' %).</p>' : '') +
+
+    '<div class="pieces">' +
+      (b.piece_identite_url
+        ? '<button class="mini" data-doc="' + esc(b.piece_identite_url) + '">' +
+          'Voir la pièce d’identité</button>'
+        : '<span class="pill gris">Pièce d’identité manquante</span>') +
+      (b.patente_url
+        ? '<button class="mini" data-doc="' + esc(b.patente_url) + '">Voir la patente</button>'
+        : '<span class="pill gris">Patente manquante</span>') +
+    '</div>' +
+
     '<div id="msg-' + esc(b.id) + '"></div>' +
     '<div class="rangee">' +
       (st !== 'verifiee' ? '<button class="mini" data-verifier="' + esc(b.id) + '">' +
@@ -293,6 +309,11 @@ function carteBoutique(b) {
       ? '<p class="note">Vérifie la patente et la pièce d’identité avant de ' +
         'passer en vitrine. C’est ce qui tient la confiance de la plateforme.</p>' : '') +
   '</div>';
+}
+
+function tauxGratuit() {
+  const g = lesPlans.filter(function (p) { return p.code === 'gratuit'; })[0];
+  return g ? g.commission_bps : 1200;
 }
 
 async function rendreBoutiques() {
@@ -872,6 +893,97 @@ document.addEventListener('keydown', function (ev) {
 });
 
 
+/* ---------- Plans ----------------------------------------
+
+   Le pourcentage d'un plan n'est pas qu'un chiffre : il est figé sur
+   chaque ligne de commande AU MOMENT DE LA VENTE. Le modifier ici ne
+   change donc rien aux ventes passées — c'est voulu, un vendeur ne
+   doit pas voir sa commission d'hier bouger — mais il s'applique à
+   tout ce qui se vendra ensuite.                                  */
+
+function cartePlan(p, nbBoutiques) {
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
+      '<span class="pill ' + (p.actif ? 'ok' : 'gris') + '">' +
+      (p.actif ? 'Actif' : 'Désactivé') + '</span>' +
+      (nbBoutiques ? '<span class="pill att">' + nbBoutiques + ' boutique(s)</span>' : '') +
+    '</div>' +
+    '<div class="champ"><label for="pl-nom-' + esc(p.code) + '">Nom</label>' +
+      '<input id="pl-nom-' + esc(p.code) + '" value="' + esc(p.nom) + '"></div>' +
+    '<div class="champ"><label for="pl-desc-' + esc(p.code) + '">Ce que le plan apporte</label>' +
+      '<textarea id="pl-desc-' + esc(p.code) + '" rows="3">' +
+      esc(p.description || '') + '</textarea></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="pl-com-' + esc(p.code) + '">Commission (%)</label>' +
+        '<input id="pl-com-' + esc(p.code) + '" inputmode="decimal" value="' +
+        (p.commission_bps / 100) + '"></div>' +
+      '<div class="champ"><label for="pl-ab-' + esc(p.code) + '">Abonnement / mois (HTG)</label>' +
+        '<input id="pl-ab-' + esc(p.code) + '" inputmode="decimal" value="' +
+        esc(enGourdes(p.abonnement_mois) || '0') + '"></div>' +
+    '</div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="pl-ref-' + esc(p.code) + '">Références max</label>' +
+        '<input id="pl-ref-' + esc(p.code) + '" class="num" type="number" min="0" value="' +
+        (p.max_references == null ? '' : p.max_references) + '" placeholder="illimité"></div>' +
+      '<div class="champ"><label for="pl-mea-' + esc(p.code) + '">Mises en avant</label>' +
+        '<input id="pl-mea-' + esc(p.code) + '" class="num" type="number" min="0" value="' +
+        (p.mises_en_avant || 0) + '"></div>' +
+      '<div class="champ"><label for="pl-ord-' + esc(p.code) + '">Ordre</label>' +
+        '<input id="pl-ord-' + esc(p.code) + '" class="num" type="number" value="' +
+        (p.ordre || 0) + '"></div>' +
+    '</div>' +
+    '<div id="msg-pl-' + esc(p.code) + '"></div>' +
+    '<div class="rangee">' +
+      '<button class="mini" data-plsave="' + esc(p.code) + '">Enregistrer</button>' +
+      '<button class="mini" data-plbascule="' + esc(p.code) + '" data-actif="' +
+        (p.actif ? '0' : '1') + '">' + (p.actif ? 'Désactiver' : 'Réactiver') + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function rendrePlans() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Plans</h2></div><p class="empty">\u2026</p>';
+  let nb = {};
+  try { nb = await OPS.boutiquesParPlan(); } catch (e) {}
+
+  z.innerHTML =
+    '<div class="sechead"><h2>Plans</h2><span class="eyebrow num">' +
+      (lesPlans.length || '') + '</span></div>' +
+    '<p class="note">La commission est prélevée automatiquement sur chaque vente : ' +
+      'le vendeur voit son solde déjà net. Le pourcentage est figé sur la commande ' +
+      'au moment de la vente — le changer ici ne touche pas aux ventes passées, ' +
+      'et c\u2019est volontaire : personne ne doit voir sa commission d\u2019hier bouger.</p>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouveau plan</h2></div>' +
+        '<div class="champ"><label for="npNom">Nom</label>' +
+          '<input id="npNom" placeholder="Gwo Biznis Plus"></div>' +
+        '<div class="champ"><label for="npDesc">Ce que le plan apporte</label>' +
+          '<textarea id="npDesc" rows="3"></textarea></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="npCom">Commission (%)</label>' +
+            '<input id="npCom" inputmode="decimal" placeholder="5"></div>' +
+          '<div class="champ"><label for="npAb">Abonnement / mois (HTG)</label>' +
+            '<input id="npAb" inputmode="decimal" placeholder="0"></div>' +
+        '</div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="npRef">Références max</label>' +
+            '<input id="npRef" class="num" type="number" min="0" placeholder="illimité"></div>' +
+          '<div class="champ"><label for="npMea">Mises en avant</label>' +
+            '<input id="npMea" class="num" type="number" min="0" value="0"></div>' +
+        '</div>' +
+        '<div id="newPlanErr"></div>' +
+        '<button class="cta" id="creerPlan">Ajouter le plan</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      lesPlans.map(function (p) { return cartePlan(p, nb[p.code] || 0); }).join('') +
+    '</div>' +
+    '<p class="note">Un plan ne se supprime pas : des abonnements et des ventes y ' +
+      'sont rattachés. Le désactiver le retire du choix sans rien casser.</p>';
+}
+
 /* ---------- Tableau de bord ------------------------------
    Ce qu'un responsable veut voir en ouvrant l'app : ce qui bloque,
    ce qu'il doit, ce qui tourne. Pas une collection de compteurs
@@ -1051,6 +1163,7 @@ async function rendre() {
   if (ongletActif === 'catalogue') await rendreCatalogue();
   if (ongletActif === 'categories') await rendreCategories();
   if (ongletActif === 'livraison') await rendreLivraison();
+  if (ongletActif === 'plans') await rendrePlans();
   if (ongletActif === 'reglements') await rendreReglements();
   if (ongletActif === 'comptes') await rendreComptes();
 }
@@ -1083,6 +1196,59 @@ document.addEventListener('click', async function (ev) {
   if (c.hasAttribute('data-doc')) {
     await agir(c, null, function () { return OPS.lienDocument(c.getAttribute('data-doc')); },
       function (url) { if (url) window.open(url, '_blank', 'noopener'); });
+    return;
+  }
+
+  if (c.id === 'creerPlan') {
+    const nom = val('npNom');
+    const com = Math.round(parseFloat((val('npCom') || '').replace(',', '.')) * 100);
+    if (!nom) { msg('newPlanErr', 'Donne un nom au plan.', 'ko'); return; }
+    if (!isFinite(com) || com < 0 || com > 10000) {
+      msg('newPlanErr', 'Commission invalide : entre 0 et 100 %.', 'ko'); return;
+    }
+    await agir(c, 'newPlanErr', function () {
+      return OPS.creerPlan({
+        nom: nom, description: val('npDesc'), commission_bps: com,
+        abonnement_mois: enCentimes(val('npAb')),
+        max_references: val('npRef') ? parseInt(val('npRef'), 10) : null,
+        mises_en_avant: parseInt(val('npMea'), 10) || 0
+      });
+    }, async function () {
+      ['npNom','npDesc','npCom','npAb','npRef'].forEach(function (k) {
+        if (el(k)) el(k).value = ''; });
+      await rechargerBase();
+      await rendrePlans();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-plsave')) {
+    const code = c.getAttribute('data-plsave');
+    const com = Math.round(parseFloat((val('pl-com-' + code) || '').replace(',', '.')) * 100);
+    if (!isFinite(com) || com < 0 || com > 10000) {
+      msg('msg-pl-' + code, 'Commission invalide : entre 0 et 100 %.', 'ko'); return;
+    }
+    const ref = val('pl-ref-' + code);
+    await agir(c, 'msg-pl-' + code, function () {
+      return OPS.majPlan(code, {
+        nom: val('pl-nom-' + code),
+        description: val('pl-desc-' + code) || null,
+        commission_bps: com,
+        abonnement_mois: enCentimes(val('pl-ab-' + code)),
+        max_references: ref === '' ? null : parseInt(ref, 10),
+        mises_en_avant: parseInt(val('pl-mea-' + code), 10) || 0,
+        ordre: parseInt(val('pl-ord-' + code), 10) || 0
+      });
+    }, async function () {
+      msg('msg-pl-' + code, 'Enregistré. S\u2019applique aux ventes à venir.', 'ok');
+      await rechargerBase();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-plbascule')) {
+    const code = c.getAttribute('data-plbascule');
+    const actif = c.getAttribute('data-actif') === '1';
+    await agir(c, 'msg-pl-' + code, function () { return OPS.majPlan(code, { actif: actif }); },
+      async function () { await rechargerBase(); await rendrePlans(); });
     return;
   }
 

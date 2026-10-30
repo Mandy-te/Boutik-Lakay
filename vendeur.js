@@ -19,6 +19,7 @@ let commandes = [];
 let categories = [];
 let produitEnEdition = null;
 let remplace = null;   // pièce dont on veut déposer une nouvelle version
+let plans = [];
 
 /* ---------- À préparer ----------------------------------- */
 
@@ -241,6 +242,8 @@ async function rendreArgent() {
     return;
   }
 
+  const abo = (boutique.abonnements || []).filter(function (a) { return !a.fin; })[0];
+  const monPlan = abo ? (plans.filter(function (p) { return p.code === abo.plan; })[0] || null) : null;
   const attente = lignes.filter(function (l) { return !l.regle; });
   const du = attente.reduce(function (s, l) { return s + Number(l.net); }, 0);
   const recu = solde ? Number(solde.libere) : 0;
@@ -398,5 +401,6 @@ document.addEventListener('change', async function (ev) {
 EQUIPE.brancher(['vendeur', 'admin'], async function () {
   boutique = await API.maBoutique().catch(function () { return null; });
   categories = (await API.categories().catch(function () { return { data: [] }; })).data || [];
+  plans = await OPS.plans().catch(function () { return []; });
   await rendre();
 }, { ouAvecBoutique: true });

@@ -175,18 +175,57 @@ const OPS = (function () {
   }
 
   async function plans() {
-    const { data, error } = await sb().from('plans').select('*').order('commission_bps', { ascending: false });
+    const { data, error } = await sb().from('plans').select('*')
+      .order('ordre').order('commission_bps', { ascending: false });
     if (error) throw error;
     return data;
   }
 
-  // Un seul abonnement actif par boutique : on clôt le précédent.
+  async function creerPlan(champs) {
+    const code = champs.code || slugifier(champs.nom).slice(0, 24).replace(/-/g, '_');
+    if (!code) throw new Error('Donne un nom au plan.');
+    const { data, error } = await sb().from('plans').insert({
+      code: code,
+      nom: champs.nom,
+      description: champs.description || null,
+      abonnement_mois: champs.abonnement_mois || 0,
+      commission_bps: champs.commission_bps,
+      max_references: champs.max_references,
+      mises_en_avant: champs.mises_en_avant || 0,
+      ordre: champs.ordre || 99,
+      actif: true
+    }).select().single();
+    if (error) {
+      if (String(error.message).indexOf('duplicate') !== -1) {
+        throw new Error('Un plan porte déjà ce nom.');
+      }
+      throw error;
+    }
+    return data;
+  }
+
+  async function majPlan(code, champs) {
+    const { error } = await sb().from('plans').update(champs).eq('code', code);
+    if (error) throw error;
+  }
+
+  // Combien de boutiques sont sur ce plan : on ne désactive pas à l'aveugle.
+  async function boutiquesParPlan() {
+    const { data, error } = await sb().from('abonnements')
+      .select('plan, boutique').is('fin', null);
+    if (error) return {};
+    const n = {};
+    (data || []).forEach(function (a) { n[a.plan] = (n[a.plan] || 0) + 1; });
+    return n;
+  }
+
+  /* Un seul abonnement actif par boutique. La base ferme le précédent
+     et vérifie qui a le droit : un vendeur choisit son plan à
+     l'inscription, l'équipe peut en changer ensuite. */
   async function definirPlan(boutiqueId, planCode) {
-    await sb().from('abonnements')
-      .update({ fin: new Date().toISOString().slice(0, 10) })
-      .eq('boutique', boutiqueId).is('fin', null);
-    const { error } = await sb().from('abonnements')
-      .insert({ boutique: boutiqueId, plan: planCode });
+    const { error } = await sb().rpc('choisir_plan', {
+      p_boutique: boutiqueId, p_plan: planCode
+    });
     if (error) throw error;
   }
 
@@ -627,6 +666,7 @@ const OPS = (function () {
     toutesBoutiques: toutesBoutiques, creerBoutique: creerBoutique,
     majStatutBoutique: majStatutBoutique, majBoutique: majBoutique,
     plans: plans, definirPlan: definirPlan, slugifier: slugifier,
+    creerPlan: creerPlan, majPlan: majPlan, boutiquesParPlan: boutiquesParPlan,
     tousPoints: tousPoints, creerPoint: creerPoint, majPoint: majPoint,
     supprimerPoint: supprimerPoint, creerTarif: creerTarif, majTarif: majTarif,
     supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
