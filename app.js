@@ -53,6 +53,9 @@ const T = {
     myAccount:'Mon compte', createAccount:'Créer mon compte',
     whyAccount:'Un compte vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone. Il nous servira aussi à vous proposer ce qui se vend près de chez vous.',
     departement:'Département', commune:'Commune',
+    editAccount:'Modifier', chooseDep:'Département de retrait',
+    chooseCom:'Commune', noPoint:'Aucun point de retrait dans cette commune.',
+    pickPoint:'Choisissez votre point de retrait',
     needPlace:'Choisissez votre département et votre commune.',
     saveProfile:'Enregistrer', saved:'Enregistré.',
     browseFirst:'Vous pouvez parcourir la boutique sans compte. Il n\u2019est demandé qu\u2019au moment de commander.',
@@ -116,6 +119,9 @@ const T = {
     myAccount:'Kont mwen', createAccount:'Kreye kont mwen',
     whyAccount:'Yon kont kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn. L ap sèvi tou pou nou pwopoze w sa k ap vann toupre lakay ou.',
     departement:'Depatman', commune:'Komin',
+    editAccount:'Chanje', chooseDep:'Depatman pou pran l',
+    chooseCom:'Komin', noPoint:'Pa gen pwen retrè nan komin sa a.',
+    pickPoint:'Chwazi pwen retrè w',
     needPlace:'Chwazi depatman w ak komin ou.',
     saveProfile:'Anrejistre', saved:'Anrejistre.',
     browseFirst:'Ou ka gade boutik la san kont. Nou mande l sèlman lè w ap kòmande.',
@@ -149,9 +155,11 @@ let recherche = '';
 let panier = [];
 try { panier = JSON.parse(localStorage.getItem('bl:panier') || '[]'); } catch (e) { panier = []; }
 
-let cache = { categories: [], points: [], produits: [], boutiques: [], commandes: [] };
+let cache = { categories: [], points: [], tarifs: [], produits: [], boutiques: [], commandes: [] };
 let prodCourant = null, boutiqueCourante = null, commandeCourante = null;
 let pointChoisi = null;
+let depRetrait = null;    // département choisi pour le retrait
+let comRetrait = null;    // commune choisie pour le retrait
 let derniereCommande = null;
 let horsLigne = false, catalogueVieux = false;
 let envoiEnCours = false;
@@ -270,10 +278,12 @@ function dureeLisible(secondes) {
 
 async function chargerReferentiels() {
   try {
-    const [c, p] = await Promise.all([API.categories(), API.pointsRetrait()]);
+    const [c, p, t] = await Promise.all([
+      API.categories(), API.pointsRetrait(), API.tarifs()
+    ]);
     cache.categories = c.data || [];
     cache.points = p.data || [];
-    if (!pointChoisi && cache.points.length) pointChoisi = cache.points[0].id;
+    cache.tarifs = t.data || [];
     horsLigne = c.horsLigne || p.horsLigne;
   } catch (e) { horsLigne = true; }
 }
@@ -516,14 +526,20 @@ function rendreProduit() {
 
 /* ---------- Rendu : panier ------------------------------- */
 
+/* Le panier affiche EXACTEMENT ce que la base facturera : même règle,
+   même tarifs. Un total qui change au moment de valider est la
+   meilleure façon de perdre un acheteur. */
 function totaux() {
   let sous = 0;
-  const shops = {};
+  const communes = [];
   panier.forEach(function (l) {
     sous += l.prix * l.quantite;
-    shops[l.boutiqueId] = 1;
+    if (l.boutiqueCommune && communes.indexOf(l.boutiqueCommune) === -1) {
+      communes.push(l.boutiqueCommune);
+    }
   });
-  const frais = Object.keys(shops).length * 25000; // 250,00 HTG par boutique
+  const pt = (cache.points || []).filter(function (p) { return p.id === pointChoisi; })[0];
+  const frais = pt ? API.calculerFrais(pt, communes, cache.tarifs) : 0;
   return { sous: sous, frais: frais, total: sous + frais };
 }
 
@@ -569,32 +585,82 @@ async function rendrePanier() {
       '<button class="cta" data-go="compte">' + esc(t('goOrder')) + '</button>' +
       '<div style="height:16px"></div>';
   } else {
-    const prof2 = prof;
+    // Déjà connecté : on rappelle qui commande, on ne redemande rien.
+    // Ces informations sont dans son compte, il les y corrige.
     h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('account')) + '</h2>' +
         '<span class="pill done">' + esc(t('connected')) + '</span></div>' +
-      '<div class="shoplist">' +
-        '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
-          '<input id="fNom" autocomplete="name" value="' +
-          esc(prof2 && prof2.nom !== 'Nouveau client' ? prof2.nom : '') + '"></div>' +
-        '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
-          '<input id="fTel" type="tel" inputmode="tel" value="' +
-          esc(prof2 ? prof2.telephone : '') + '"></div>' +
-        '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
-          '<input id="fMail" type="email" inputmode="email" value="' +
-          esc(prof2 && prof2.email_contact ? prof2.email_contact : '') + '"></div>' +
+      '<div class="totals">' +
+        '<div class="trow"><span>' + esc(t('yourName')) + '</span><strong>' +
+          esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '\u2014') + '</strong></div>' +
+        '<div class="trow"><span>' + esc(t('yourPhone')) + '</span>' +
+          '<strong class="num">' + esc(prof ? prof.telephone : '\u2014') + '</strong></div>' +
+        '<div class="trow"><span></span>' +
+          '<button class="lienCompte" data-go="compte">' + esc(t('editAccount')) + '</button></div>' +
       '</div>' +
       '<p class="note">' + esc(t('phoneWhy')) + '</p>' +
       '<div id="compteErr"></div>';
   }
 
-  h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('pickT')) + '</h2></div><div class="picker">' +
-    cache.points.map(function (pt) {
-      return '<button class="pick" data-pick="' + esc(pt.id) + '" aria-pressed="' + (pointChoisi === pt.id) + '">' +
-        '<span class="dot"></span><span class="shopmeta">' +
-        '<span class="shopname">' + esc(pt.nom) + '</span>' +
-        '<span class="shopsub">' + esc(pt.repere) + ' · ' + esc(pt.commune) + '</span>' +
-        '</span></button>';
-    }).join('') + '</div>';
+  /* Le point de retrait se choisit en descendant : département, puis
+     commune, puis le point. Avec des points dans tout le pays, une
+     liste plate deviendrait inutilisable — et l'acheteur cherche de
+     toute façon « près de chez moi », pas « dans la liste ». */
+  const pts = (cache.points || []).filter(function (p) { return p.actif !== false; });
+  const deps = [];
+  pts.forEach(function (p) {
+    const d = p.departement || departementDe(p.commune);
+    if (d && deps.indexOf(d) === -1) deps.push(d);
+  });
+  deps.sort();
+
+  // Par défaut, là où habite l'acheteur : c'est presque toujours le bon.
+  if (!depRetrait) {
+    const sien = (prof && prof.departement) || departementDe(prof && prof.commune);
+    depRetrait = (sien && deps.indexOf(sien) !== -1) ? sien : (deps[0] || null);
+    comRetrait = null;
+  }
+
+  const dansDep = pts.filter(function (p) {
+    return (p.departement || departementDe(p.commune)) === depRetrait;
+  });
+  const coms = [];
+  dansDep.forEach(function (p) { if (coms.indexOf(p.commune) === -1) coms.push(p.commune); });
+  coms.sort();
+
+  if (!comRetrait || coms.indexOf(comRetrait) === -1) {
+    const sienne = prof && prof.commune;
+    comRetrait = (sienne && coms.indexOf(sienne) !== -1) ? sienne : (coms[0] || null);
+  }
+
+  const dansCom = dansDep.filter(function (p) { return p.commune === comRetrait; });
+  if (!dansCom.some(function (p) { return p.id === pointChoisi; })) {
+    pointChoisi = dansCom.length ? dansCom[0].id : null;
+  }
+
+  h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('pickT')) + '</h2></div>' +
+    '<div class="shoplist">' +
+      '<div class="champ"><label for="rDep">' + esc(t('chooseDep')) + '</label>' +
+        '<select id="rDep">' + deps.map(function (d) {
+          return '<option value="' + esc(d) + '"' + (d === depRetrait ? ' selected' : '') +
+            '>' + esc(d) + '</option>';
+        }).join('') + '</select></div>' +
+      '<div class="champ"><label for="rCom">' + esc(t('chooseCom')) + '</label>' +
+        '<select id="rCom">' + coms.map(function (c) {
+          return '<option value="' + esc(c) + '"' + (c === comRetrait ? ' selected' : '') +
+            '>' + esc(c) + '</option>';
+        }).join('') + '</select></div>' +
+    '</div>' +
+    (dansCom.length
+      ? '<p class="note">' + esc(t('pickPoint')) + '</p><div class="picker">' +
+        dansCom.map(function (pt) {
+          return '<button class="pick" data-pick="' + esc(pt.id) + '" aria-pressed="' +
+            (pointChoisi === pt.id) + '">' +
+            '<span class="dot"></span><span class="shopmeta">' +
+            '<span class="shopname">' + esc(pt.nom) + '</span>' +
+            '<span class="shopsub">' + esc(pt.repere) + '</span>' +
+            '</span></button>';
+        }).join('') + '</div>'
+      : '<p class="note" style="color:var(--hot)">' + esc(t('noPoint')) + '</p>');
 
   const tt = totaux();
   h += '<div style="height:14px"></div><div class="totals">' +
@@ -912,18 +978,11 @@ function appliquerLangue() {
 async function envoyerCommande() {
   if (envoiEnCours) return;
   const btn = el('orderBtn'), err = el('cartErr');
-  const nom = (el('fNom').value || '').trim();
-  const tel = (el('fTel').value || '').trim();
-  const mail = (el('fMail') && el('fMail').value || '').trim();
-  const pin = (el('fPin') && el('fPin').value || '').trim();
-
-  if (!nom || !API.telValide(tel)) {
-    err.innerHTML = '<div class="erreur">' +
-      esc(API.telValide(tel) ? t('needName') : t('needTel')) + '</div>';
-    return;
-  }
-  if (invite && pin.length !== 6) {
-    err.innerHTML = '<div class="erreur">' + esc(t('needPin')) + '</div>';
+  // Le nom et le téléphone viennent du compte : on ne les redemande pas.
+  const prof = await API.profil().catch(function () { return null; });
+  if (!prof || !prof.nom || prof.nom === 'Nouveau client' || !API.telValide(prof.telephone)) {
+    err.innerHTML = '<div class="erreur">' + esc(t('needName')) + '</div>';
+    aller('compte');
     return;
   }
   if (!pointChoisi) {
@@ -937,16 +996,6 @@ async function envoyerCommande() {
   btn.textContent = t('ordering');
 
   try {
-    // Le compte se crée au moment de commander, pas à l'entrée du site.
-    if (invite) {
-      await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang });
-      invite = false;
-    } else {
-      await API.majProfil({
-        nom: nom, telephone: API.normaliserTel(tel), langue: lang,
-        email_contact: mail || null
-      });
-    }
     const res = await API.creerCommande(
       panier.map(function (l) { return { variante: l.variante, quantite: l.quantite }; }),
       pointChoisi
@@ -1082,6 +1131,7 @@ document.addEventListener('click', function (ev) {
         variante: v.id, quantite: 1, libelle: v.libelle,
         prix: prixDe(p, v), nom: p.nom, categorie: p.categorie,
         boutique: p.boutique ? p.boutique.nom : '', boutiqueId: p.boutique ? p.boutique.id : '',
+        boutiqueCommune: p.boutique ? p.boutique.commune : '',
         photo: photo(p), stock: v.stock
       });
     }
@@ -1169,6 +1219,12 @@ document.addEventListener('click', function (ev) {
     rendrePanier();
     return;
   }
+});
+
+document.addEventListener('change', function (ev) {
+  const c = ev.target;
+  if (c.id === 'rDep') { depRetrait = c.value; comRetrait = null; pointChoisi = null; rendrePanier(); return; }
+  if (c.id === 'rCom') { comRetrait = c.value; pointChoisi = null; rendrePanier(); return; }
 });
 
 el('q').addEventListener('input', function (ev) {

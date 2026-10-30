@@ -115,7 +115,8 @@ const OPS = (function () {
 
   async function creerPoint(champs) {
     const { data, error } = await sb().from('points_retrait').insert({
-      nom: champs.nom, commune: champs.commune, repere: champs.repere,
+      nom: champs.nom, departement: champs.departement || null,
+      commune: champs.commune, repere: champs.repere,
       telephone: champs.telephone || null,
       frais: champs.frais, actif: true
     }).select().single();

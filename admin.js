@@ -429,11 +429,15 @@ function cartePoint(p) {
       '<span class="pill ' + (p.actif ? 'ok' : 'gris') + '">' +
       esc(p.actif ? 'Actif' : 'Désactivé') + '</span></div>' +
 
+    '<div class="champ"><label for="p-nom-' + esc(p.id) + '">Nom</label>' +
+      '<input id="p-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
     '<div class="duo">' +
-      '<div class="champ"><label for="p-nom-' + esc(p.id) + '">Nom</label>' +
-        '<input id="p-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+      '<div class="champ"><label for="p-dep-' + esc(p.id) + '">Département</label>' +
+        '<select id="p-dep-' + esc(p.id) + '">' +
+        optionsDepartements(p.departement || departementDe(p.commune)) + '</select></div>' +
       '<div class="champ"><label for="p-com-' + esc(p.id) + '">Commune</label>' +
-        '<input id="p-com-' + esc(p.id) + '" value="' + esc(p.commune) + '"></div>' +
+        '<select id="p-com-' + esc(p.id) + '">' +
+        optionsCommunes(p.departement || departementDe(p.commune), p.commune) + '</select></div>' +
     '</div>' +
     '<div class="duo">' +
       '<div class="champ"><label for="p-rep-' + esc(p.id) + '">Point de repère</label>' +
@@ -497,11 +501,13 @@ async function rendreLivraison() {
         '<div class="champ"><label for="ptNom">Nom</label>' +
           '<input id="ptNom" placeholder="Flashipping Limbé"></div>' +
         '<div class="duo">' +
+          '<div class="champ"><label for="ptDep">Département</label>' +
+            '<select id="ptDep">' + optionsDepartements(null) + '</select></div>' +
           '<div class="champ"><label for="ptCommune">Commune</label>' +
-            '<input id="ptCommune" placeholder="Limbé"></div>' +
-          '<div class="champ"><label for="ptFrais">Tarif de base (HTG)</label>' +
-            '<input id="ptFrais" inputmode="decimal" placeholder="250"></div>' +
+            '<select id="ptCommune">' + optionsCommunes(null, null) + '</select></div>' +
         '</div>' +
+        '<div class="champ"><label for="ptFrais">Tarif de base (HTG)</label>' +
+          '<input id="ptFrais" inputmode="decimal" placeholder="250"></div>' +
         '<div class="duo">' +
           '<div class="champ"><label for="ptRepere">Point de repère</label>' +
             '<input id="ptRepere" placeholder="Place publique"></div>' +
@@ -516,6 +522,12 @@ async function rendreLivraison() {
       (points.length ? points.map(cartePoint).join('')
         : '<p class="empty">Aucun point de retrait.</p>') +
     '</div>';
+
+  // Les listes département/commune se répondent, ici comme ailleurs.
+  lierDepartementCommune('ptDep', 'ptCommune');
+  points.forEach(function (p) {
+    lierDepartementCommune('p-dep-' + p.id, 'p-com-' + p.id);
+  });
 }
 
 /* ---------- Événements : clics ---------------------------- */
@@ -672,7 +684,7 @@ document.addEventListener('click', async function (ev) {
     }
     if (frais < 0) { msg('newPtErr', 'Tarif invalide.', 'ko'); return; }
     await agir(c, 'newPtErr', function () {
-      return OPS.creerPoint({ nom: nom, commune: com, repere: rep,
+      return OPS.creerPoint({ nom: nom, departement: val('ptDep'), commune: com, repere: rep,
         telephone: val('ptTel'), frais: frais || 25000 });
     }, async function () {
       ['ptNom','ptCommune','ptRepere','ptTel','ptFrais'].forEach(function (k) {
@@ -690,7 +702,7 @@ document.addEventListener('click', async function (ev) {
       msg('msg-pt-' + id, 'Nom, commune et repère sont nécessaires.', 'ko'); return;
     }
     await agir(c, 'msg-pt-' + id, function () {
-      return OPS.majPoint(id, { nom: nom, commune: com, repere: rep,
+      return OPS.majPoint(id, { nom: nom, departement: val('p-dep-' + id), commune: com, repere: rep,
         telephone: val('p-tel-' + id) || null,
         frais: Math.max(0, enCentimes(val('p-frais-' + id))) });
     }, async function () {

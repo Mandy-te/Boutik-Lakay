@@ -242,6 +242,31 @@ const API = (function () {
     });
   }
 
+  // Les tarifs de livraison, pour que le panier affiche EXACTEMENT ce
+  // que la base facturera. Un total qui change au moment de valider
+  // est la meilleure façon de perdre un acheteur.
+  function tarifs() {
+    return avecCache('tarifs', function () {
+      return sb().from('tarifs_livraison').select('*');
+    });
+  }
+
+  /* Même calcul que frais_livraison() en base : tarif particulier pour
+     la commune d'origine, sinon tarif de base du point. Une commande à
+     plusieurs boutiques paie un trajet par boutique. */
+  function calculerFrais(point, communesOrigine, lesTarifs) {
+    if (!point) return 0;
+    const norm = function (x) { return String(x || '').trim().toLowerCase(); };
+    const vues = {};
+    (communesOrigine || []).forEach(function (c) { vues[norm(c)] = c; });
+    return Object.keys(vues).reduce(function (total, cle) {
+      const t = (lesTarifs || []).filter(function (x) {
+        return x.point_retrait === point.id && norm(x.commune_origine) === cle;
+      })[0];
+      return total + (t ? Number(t.frais) : Number(point.frais || 25000));
+    }, 0);
+  }
+
   function parametres() {
     return avecCache('parametres', function () {
       return sb().from('parametres').select('*');
@@ -415,6 +440,7 @@ const API = (function () {
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     regenererCode: regenererCode,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
+    tarifs: tarifs, calculerFrais: calculerFrais,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,
     prixVariante: prixVariante, fourchette: fourchette, medias: medias,
     creerCommande: creerCommande, codeLocal: codeLocal,
