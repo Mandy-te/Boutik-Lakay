@@ -256,7 +256,7 @@ const API = (function () {
   const CHAMPS_PRODUIT =
     'id, nom, description, prix, categorie, prepaiement_exige, mis_en_avant_jusqu_au, ' +
     'boutique:boutiques!inner(id, nom, slug, commune, statut), ' +
-    'variantes(id, libelle, stock, prix), ' +
+    'variantes(id, libelle, stock, prix, attributs), ' +
     'medias(chemin, ordre, type, mime)';
 
   // Prix réellement payé pour une variante : le sien s'il existe, sinon

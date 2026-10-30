@@ -274,7 +274,8 @@ const OPS = (function () {
   // Brouillons compris : c'est la vue de travail de l'équipe.
   async function produitsBoutique(boutiqueId) {
     const { data, error } = await sb().from('produits')
-      .select('*, variantes(id, libelle, stock, prix), medias(id, chemin, ordre, type, mime)')
+      .select('*, variantes(id, libelle, stock, prix, attributs), ' +
+              'medias(id, chemin, ordre, type, mime)')
       .eq('boutique', boutiqueId)
       .order('cree_le', { ascending: false });
     if (error) throw error;
@@ -304,6 +305,47 @@ const OPS = (function () {
   // Un produit déjà commandé ne se supprime pas : sa variante est protégée
   // par une clé étrangère, pour que l'historique des ventes reste intact.
   // On explique au lieu de laisser passer l'erreur brute de Postgres.
+  /* ---------- Révision ------------------------------------
+     Le vendeur soumet, l'équipe publie ou refuse avec un motif.
+     Un refus sans explication ne fait pas corriger : il fait
+     abandonner.                                               */
+
+  async function soumettreProduit(id) {
+    const { data: p, error: e1 } = await sb().from('produits')
+      .select('id, nom, prix, variantes(stock), medias(id, type)')
+      .eq('id', id).single();
+    if (e1) throw e1;
+
+    const stock = (p.variantes || []).reduce(function (n, v) { return n + (v.stock || 0); }, 0);
+    const photos = (p.medias || []).filter(function (m) { return (m.type || 'image') === 'image'; });
+    if (!stock) throw new Error('Ajoutez au moins une variante avec du stock.');
+    if (!photos.length) throw new Error('Ajoutez au moins une photo : une fiche sans ' +
+      'photo ne se vend pas, et la grille du catalogue affiche des vignettes.');
+
+    const { error } = await sb().from('produits')
+      .update({ statut: 'en_revision' }).eq('id', id);
+    if (error) throw error;
+  }
+
+  async function refuserProduit(id, commentaire) {
+    const { error } = await sb().rpc('refuser_produit', {
+      p_produit: id, p_commentaire: commentaire
+    });
+    if (error) throw error;
+  }
+
+  // Les produits qui attendent une décision de l'équipe.
+  async function aReviser() {
+    const { data, error } = await sb().from('produits')
+      .select('*, boutique:boutiques(id, nom, commune), ' +
+              'variantes(id, libelle, stock, prix, attributs), ' +
+              'medias(id, chemin, ordre, type, mime)')
+      .eq('statut', 'en_revision')
+      .order('soumis_le', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+
   async function supprimerProduit(id) {
     const { error } = await sb().from('produits').delete().eq('id', id);
     if (error) {
@@ -321,10 +363,23 @@ const OPS = (function () {
      un 50 ml ne coûtent pas la même chose. Prix vide = celui du
      produit.                                                  */
 
-  async function ajouterVariante(produitId, libelle, prix, stock) {
+  /* L'étiquette se fabrique à partir des axes : « M · Rouge ». Elle
+     sert d'affichage et de garde-fou contre les doublons, puisque deux
+     variantes ne peuvent pas porter le même libellé sur un produit. */
+  function libelleDeAttributs(attributs) {
+    const cles = Object.keys(attributs || {}).filter(function (k) {
+      return String(attributs[k] || '').trim(); });
+    if (!cles.length) return '';
+    return cles.map(function (k) { return String(attributs[k]).trim(); }).join(' \u00b7 ');
+  }
+
+  async function ajouterVariante(produitId, libelle, prix, stock, attributs) {
+    const att = attributs || {};
+    const etiquette = (libelle || '').trim() || libelleDeAttributs(att) || 'Standard';
     const { data, error } = await sb().from('variantes').insert({
       produit: produitId,
-      libelle: (libelle || '').trim() || 'Standard',
+      libelle: etiquette,
+      attributs: att,
       prix: prix ? Math.max(1, prix) : null,
       stock: Math.max(0, parseInt(stock, 10) || 0)
     }).select().single();
@@ -675,6 +730,8 @@ const OPS = (function () {
     toutesCategories: toutesCategories, creerCategorie: creerCategorie,
     majCategorie: majCategorie, basculerCategorie: basculerCategorie,
     produitsBoutique: produitsBoutique, creerProduit: creerProduit,
+    soumettreProduit: soumettreProduit, refuserProduit: refuserProduit,
+    aReviser: aReviser, libelleDeAttributs: libelleDeAttributs,
     majProduit: majProduit, supprimerProduit: supprimerProduit,
     ajouterVariante: ajouterVariante, majVariante: majVariante,
     supprimerVariante: supprimerVariante,

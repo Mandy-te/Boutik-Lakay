@@ -17,7 +17,7 @@ const T = {
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
     navHome:'Accueil', navShops:'Boutiques', navOrders:'Commandes', navCart:'Panier',
     back:'← Retour', items:'articles', by:'Vendu par', stock:'en stock',
-    add:'Mettre au panier', soldout:'Rupture de stock', size:'Choix', verified:'VÉRIFIÉ',
+    add:'Mettre au panier', soldout:'Rupture de stock', size:'Choix', verified:'VÉRIFIÉ', pickAll:'Choisissez chaque option',
     emptyCat:'Aucun article publié pour le moment.',
     emptyShops:'Aucune boutique vérifiée pour le moment.',
     emptyCart:'Votre panier est vide.', browse:'Voir les articles',
@@ -80,7 +80,7 @@ const T = {
     ordersNote:'Swiv chak kòmand jiska retrè a.',
     navHome:'Akèy', navShops:'Boutik', navOrders:'Kòmand', navCart:'Panyen',
     back:'← Tounen', items:'atik', by:'Machann', stock:'nan stock',
-    add:'Mete nan panyen', soldout:'Pa gen ankò', size:'Chwa', verified:'VERIFYE',
+    add:'Mete nan panyen', soldout:'Pa gen ankò', size:'Chwa', verified:'VERIFYE', pickAll:'Chwazi chak opsyon',
     emptyCat:'Pa gen atik pibliye pou kounye a.',
     emptyShops:'Pa gen boutik verifye pou kounye a.',
     emptyCart:'Panyen w vid.', browse:'Gade atik yo',
@@ -422,14 +422,30 @@ function blocPaiement() {
   return h;
 }
 
-// Variante actuellement choisie sur la fiche ouverte.
+// Variante actuellement choisie sur la fiche ouverte, et le choix
+// axe par axe quand le produit se décline sur plusieurs dimensions.
 let varianteChoisie = null;
+let choixAxes = {};
+
+// Retrouve la variante qui correspond au choix complet. Tant qu'un axe
+// n'est pas choisi, il n'y a pas de variante : on le dit plutôt que
+// d'en prendre une au hasard.
+function varianteSelonAxes(p) {
+  const vars = (p.variantes || []).filter(function (v) { return v.stock > 0; });
+  const axes = Object.keys(choixAxes);
+  if (!axes.length) return null;
+  return vars.filter(function (v) {
+    return axes.every(function (a) { return (v.attributs || {})[a] === choixAxes[a]; });
+  })[0] || null;
+}
 
 function majPrixAffiche() {
   const p = prodCourant;
   if (!p) return;
   const vars = (p.variantes || []).filter(function (v) { return v.stock > 0; });
-  const v = vars.filter(function (x) { return x.id === varianteChoisie; })[0] || vars[0] || null;
+  const v = varianteSelonAxes(p) ||
+    vars.filter(function (x) { return x.id === varianteChoisie; })[0] || vars[0] || null;
+  if (v) varianteChoisie = v.id;
   const prix = prixDe(p, v);
   const zp = el('zonePrix'), zu = el('zoneUsd'), zs = el('zoneStock');
   if (zp) zp.textContent = htg(prix);
@@ -444,6 +460,14 @@ function rendreProduit() {
   const vars = (p.variantes || []).filter(function (v) { return v.stock > 0; });
   const rupture = stockTotal(p) <= 0;
   varianteChoisie = vars.length ? vars[0].id : null;
+  // Au premier affichage, on présélectionne la combinaison de la
+  // première variante disponible : l'acheteur voit un prix, pas un vide.
+  choixAxes = {};
+  if (vars.length) {
+    Object.keys(vars[0].attributs || {}).forEach(function (k) {
+      choixAxes[k] = vars[0].attributs[k];
+    });
+  }
   const vidUrl = videoDe(p);
 
   // Le libellé montre le prix quand les variantes n'ont pas le même :
@@ -1046,9 +1070,9 @@ document.addEventListener('click', function (ev) {
     const p = prodCourant;
     if (!p) return;
     const dispo = (p.variantes || []).filter(function (v) { return v.stock > 0; });
-    const vid = varianteChoisie || (dispo[0] && dispo[0].id);
-    if (!vid) return;
-    const v = dispo.filter(function (x) { return x.id === vid; })[0] || dispo[0];
+    const v = varianteSelonAxes(p) ||
+      dispo.filter(function (x) { return x.id === varianteChoisie; })[0] || dispo[0];
+    if (!v) return;
 
     const existante = panier.filter(function (l) { return l.variante === v.id; })[0];
     if (existante) {
@@ -1109,6 +1133,20 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (n.hasAttribute('data-pick')) { pointChoisi = n.getAttribute('data-pick'); rendrePanier(); return; }
+  if (n.hasAttribute('data-axe')) {
+    const axe = n.getAttribute('data-axe');
+    choixAxes[axe] = n.getAttribute('data-val');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-axe="' + axe + '"]'),
+      function (b) { b.setAttribute('aria-pressed', b === n); });
+    const v = varianteSelonAxes(prodCourant);
+    const btn = el('addBtn');
+    if (btn) {
+      btn.disabled = !v;
+      btn.textContent = v ? t('add') : t('pickAll');
+    }
+    majPrixAffiche();
+    return;
+  }
   if (n.hasAttribute('data-var')) {
     Array.prototype.forEach.call(document.querySelectorAll('[data-var]'), function (b) {
       b.setAttribute('aria-pressed', b === n);

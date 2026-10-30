@@ -24,6 +24,7 @@ let communes = [];
 let aRegler = [];
 let lesSoldes = [];
 let comptes = [];
+let aRevisers = [];
 
 /* ---------- Onglet Catalogue ----------------------------- */
 
@@ -893,6 +894,99 @@ document.addEventListener('keydown', function (ev) {
 });
 
 
+/* ---------- Révision -------------------------------------
+
+   Les fiches soumises par les vendeurs, les plus anciennes d'abord.
+   L'équipe corrige directement ce qui est corrigeable — une faute,
+   une description trop maigre — et refuse en expliquant ce que le
+   vendeur doit reprendre lui-même : une photo floue, une variante
+   manquante. Un refus sans motif ne fait pas corriger, il fait
+   abandonner.                                                    */
+
+function carteRevision(p) {
+  const med = (p.medias || []).slice()
+    .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
+  const axes = [];
+  (p.variantes || []).forEach(function (v) {
+    Object.keys(v.attributs || {}).forEach(function (k) {
+      if (axes.indexOf(k) === -1) axes.push(k); });
+  });
+
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
+      '<span class="pill att">En révision</span></div>' +
+    '<div class="ligne"><span>Boutique</span><strong>' +
+      esc(p.boutique ? p.boutique.nom : '\u2014') + '</strong></div>' +
+    '<div class="ligne"><span>Soumise</span><span>' + esc(quand(p.soumis_le)) + '</span></div>' +
+
+    (med.length
+      ? '<div class="vignettes">' + med.map(function (m) {
+          const url = API.photoUrl(m.chemin);
+          return '<div class="media">' +
+            ((m.type || 'image') === 'video'
+              ? '<video class="vignette" src="' + esc(url) + '" muted playsinline preload="metadata"></video>' +
+                '<span class="vid">VIDÉO</span>'
+              : '<img class="vignette" src="' + esc(url) + '" alt="" loading="lazy">') +
+            '<button class="sup" data-supmedia="' + esc(m.id) + '" data-prod="' + esc(p.id) +
+              '" aria-label="Supprimer">\u00d7</button></div>';
+        }).join('') + '</div>'
+      : '<p class="note" style="color:var(--hot)">Aucune photo.</p>') +
+
+    // Corrigeable sur place : nom, catégorie, prix, description.
+    '<div class="edit">' +
+      '<div class="champ"><label for="rv-nom-' + esc(p.id) + '">Nom</label>' +
+        '<input id="rv-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+      '<div class="duo">' +
+        '<div class="champ"><label for="rv-cat-' + esc(p.id) + '">Catégorie</label>' +
+          '<select id="rv-cat-' + esc(p.id) + '">' + optionsCategories(p.categorie) + '</select></div>' +
+        '<div class="champ"><label for="rv-prix-' + esc(p.id) + '">Prix (HTG)</label>' +
+          '<input id="rv-prix-' + esc(p.id) + '" inputmode="decimal" value="' +
+          esc(enGourdes(p.prix)) + '"></div>' +
+      '</div>' +
+      '<div class="champ"><label for="rv-desc-' + esc(p.id) + '">Description</label>' +
+        '<textarea id="rv-desc-' + esc(p.id) + '" rows="6">' +
+        esc(p.description || '') + '</textarea></div>' +
+      '<button class="mini" data-rvsave="' + esc(p.id) + '">Enregistrer mes corrections</button>' +
+    '</div>' +
+
+    '<div class="sechead"><h2 style="font-size:13px">Variantes' +
+      (axes.length ? ' \u2014 ' + axes.map(esc).join(', ') : '') + '</h2></div>' +
+    ((p.variantes || []).length
+      ? (p.variantes || []).map(function (v) {
+          return '<div class="ligne"><span>' + esc(v.libelle) + '</span>' +
+            '<span class="num">' + htg(v.prix || p.prix) + ' \u00b7 ' +
+            (v.stock || 0) + ' en stock</span></div>';
+        }).join('')
+      : '<p class="note" style="color:var(--hot)">Aucune variante.</p>') +
+
+    '<div class="champ"><label for="rv-com-' + esc(p.id) + '">Motif du refus</label>' +
+      '<textarea id="rv-com-' + esc(p.id) + '" rows="3" placeholder="Ce que le vendeur ' +
+      'doit reprendre : photo floue, variante manquante\u2026"></textarea></div>' +
+    '<div id="msg-' + esc(p.id) + '"></div>' +
+    '<button class="cta vert" data-rvpublier="' + esc(p.id) + '">Publier en vitrine</button>' +
+    '<button class="ghost" data-rvrefuser="' + esc(p.id) + '">Renvoyer au vendeur</button>' +
+  '</div>';
+}
+
+async function rendreRevision() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Révision</h2></div><p class="empty">\u2026</p>';
+  try {
+    aRevisers = await OPS.aReviser();
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+  z.innerHTML =
+    '<div class="sechead"><h2>Révision</h2><span class="eyebrow num">' +
+      (aRevisers.length || '') + '</span></div>' +
+    (aRevisers.length
+      ? '<p class="note">Corrige ce qui est corrigeable ici même. Renvoie au vendeur ' +
+        'ce que lui seul peut reprendre, en disant quoi.</p>' +
+        '<div class="pile">' + aRevisers.map(carteRevision).join('') + '</div>'
+      : '<p class="empty">Aucune fiche en attente.</p>');
+}
+
 /* ---------- Plans ----------------------------------------
 
    Le pourcentage d'un plan n'est pas qu'un chiffre : il est figé sur
@@ -1163,6 +1257,7 @@ async function rendre() {
   if (ongletActif === 'catalogue') await rendreCatalogue();
   if (ongletActif === 'categories') await rendreCategories();
   if (ongletActif === 'livraison') await rendreLivraison();
+  if (ongletActif === 'revision') await rendreRevision();
   if (ongletActif === 'plans') await rendrePlans();
   if (ongletActif === 'reglements') await rendreReglements();
   if (ongletActif === 'comptes') await rendreComptes();
@@ -1196,6 +1291,39 @@ document.addEventListener('click', async function (ev) {
   if (c.hasAttribute('data-doc')) {
     await agir(c, null, function () { return OPS.lienDocument(c.getAttribute('data-doc')); },
       function (url) { if (url) window.open(url, '_blank', 'noopener'); });
+    return;
+  }
+
+  if (c.hasAttribute('data-rvsave')) {
+    const id = c.getAttribute('data-rvsave');
+    const prix = enCentimes(val('rv-prix-' + id));
+    if (!val('rv-nom-' + id)) { msg('msg-' + id, 'Le nom ne peut pas être vide.', 'ko'); return; }
+    if (prix <= 0) { msg('msg-' + id, 'Prix invalide.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () {
+      return OPS.majProduit(id, {
+        nom: val('rv-nom-' + id), prix: prix,
+        categorie: el('rv-cat-' + id).value,
+        description: val('rv-desc-' + id) || null
+      });
+    }, function () { msg('msg-' + id, 'Corrections enregistrées.', 'ok'); });
+    return;
+  }
+  if (c.hasAttribute('data-rvpublier')) {
+    const id = c.getAttribute('data-rvpublier');
+    await agir(c, 'msg-' + id, function () { return OPS.publier(id); },
+      async function () { await rendreRevision(); });
+    return;
+  }
+  if (c.hasAttribute('data-rvrefuser')) {
+    const id = c.getAttribute('data-rvrefuser');
+    const motif = val('rv-com-' + id);
+    if (!motif) {
+      msg('msg-' + id, 'Écris ce que le vendeur doit corriger : un refus sans ' +
+        'motif ne fait pas corriger, il fait abandonner.', 'ko');
+      return;
+    }
+    await agir(c, 'msg-' + id, function () { return OPS.refuserProduit(id, motif); },
+      async function () { await rendreRevision(); });
     return;
   }
 
