@@ -28,14 +28,16 @@
     <p class="note">Connectez-vous : vous serez conduit à votre espace.</p>
     <div class="pile">
       <div class="bloc">
-        <div class="champ"><label for="email">Adresse e-mail</label>
-          <input id="email" type="email" autocomplete="username" inputmode="email"></div>
+        <div class="champ"><label for="email">Adresse e-mail ou téléphone</label>
+          <input id="email" autocomplete="username"></div>
         <div class="champ"><label for="mdp">Mot de passe</label>
           <input id="mdp" type="password" autocomplete="current-password"></div>
         <div id="loginErr"></div>
         <button class="cta" id="entrer">Entrer</button>
       </div>
       <p class="note">Acheteur ? <a href="index.html">La boutique est par ici.</a></p>
+      <p class="note">Vous voulez vendre ?
+        <a href="devenir-vendeur.html">Ouvrez votre boutique.</a></p>
     </div>
   </section>
 
@@ -86,7 +88,9 @@ async function router() {
     document.getElementById('choix').innerHTML =
       '<div class="bloc"><p class="note">Ce compte n’appartient pas à l’équipe. ' +
       'Si vous êtes vendeur, demandez à un administrateur de vous donner le rôle.</p>' +
-      '<a class="cta" href="index.html" style="display:block;text-align:center;' +
+      '<a class="cta" href="devenir-vendeur.html" style="display:block;text-align:center;' +
+      'text-decoration:none">Ouvrir ma boutique</a>' +
+      '<a class="ghost" href="index.html" style="display:block;text-align:center;' +
       'text-decoration:none">Aller à la boutique</a>' +
       '<button class="ghost" id="sortir2">Se déconnecter</button></div>';
     montrerVue('choix');

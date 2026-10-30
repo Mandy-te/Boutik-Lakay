@@ -411,6 +411,7 @@ const API = (function () {
     sb: sb, pret: pret,
     session: session, monId: monId, profil: profil, majProfil: majProfil,
     normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
+    identifiantInterne: identifiantInterne,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     regenererCode: regenererCode,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,

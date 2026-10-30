@@ -12,6 +12,7 @@ const T = {
   fr: {
     search:'Chercher un article', boost:'Mises en avant', all:'Tous les articles',
     shops:'Boutiques', shopsNote:'Grand Nord. Chaque vendeur est vérifié avant publication.',
+    sellHere:'Vendre sur Boutique Lakay',
     cart:'Panier', orders:'Mes commandes',
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
     navHome:'Accueil', navShops:'Boutiques', navOrders:'Commandes', navCart:'Panier',
@@ -67,6 +68,7 @@ const T = {
   ht: {
     search:'Chèche yon atik', boost:'Mete devan', all:'Tout atik yo',
     shops:'Boutik', shopsNote:'Gran Nò. Chak machann verifye anvan nou pibliye.',
+    sellHere:'Vann sou Boutique Lakay',
     cart:'Panyen', orders:'Kòmand mwen',
     ordersNote:'Swiv chak kòmand jiska retrè a.',
     navHome:'Akèy', navShops:'Boutik', navOrders:'Kòmand', navCart:'Panyen',
@@ -359,7 +361,10 @@ async function rendreBoutiques() {
     try { const r = await API.boutiques(); cache.boutiques = r.data || []; } catch (e) {}
   }
   const b = cache.boutiques;
-  el('shopList').innerHTML = b.length ? b.map(function (s) {
+  const lienVendre = '<a class="ghost" href="devenir-vendeur.html" ' +
+    'style="display:block;text-align:center;text-decoration:none;margin-top:6px">' +
+    esc(t('sellHere')) + '</a>';
+  el('shopList').innerHTML = (b.length ? b.map(function (s) {
     return '<button class="shop" data-shop="' + esc(s.id) + '">' +
       '<span class="avatar t-rad">' + esc((s.nom || '?').charAt(0)) + '</span>' +
       '<span class="shopmeta">' +
@@ -367,7 +372,7 @@ async function rendreBoutiques() {
           ' <span class="badge ok">' + esc(t('verified')) + '</span></span>' +
         '<span class="shopsub">' + esc(s.commune) + '</span>' +
       '</span></button>';
-  }).join('') : '<p class="empty">' + esc(t('emptyShops')) + '</p>';
+  }).join('') : '<p class="empty">' + esc(t('emptyShops')) + '</p>') + lienVendre;
 }
 
 async function rendreBoutique() {

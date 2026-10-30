@@ -215,10 +215,41 @@ async function rendreArgent() {
 
 /* ---------- Navigation ------------------------------------ */
 
+function bandeauBoutique() {
+  if (!boutique) {
+    return '<div class="bloc"><p class="note">Aucune boutique n\u2019est rattachée à ' +
+      'ce compte. Si vous venez de vous inscrire, un agent doit d\u2019abord la ' +
+      'rattacher.</p></div>';
+  }
+  if (boutique.statut === 'en_attente') {
+    return '<div class="bloc" style="border-color:var(--warn)">' +
+      '<div class="titreligne"><h2>' + esc(boutique.nom) + '</h2>' +
+      '<span class="pill warn">En attente</span></div>' +
+      '<p class="note">Un agent vérifie votre patente et votre pièce d\u2019identité, ' +
+      'puis vous appelle. Vos articles ne sont pas encore visibles des acheteurs.</p>' +
+      '<p class="note">Pièces reçues : ' +
+      (boutique.piece_identite_url ? 'identité' : '—') + ' \u00b7 ' +
+      (boutique.patente_url ? 'patente' : '—') + '</p></div>';
+  }
+  if (boutique.statut === 'suspendue') {
+    return '<div class="bloc" style="border-color:var(--hot)">' +
+      '<div class="titreligne"><h2>' + esc(boutique.nom) + '</h2>' +
+      '<span class="pill ko">Suspendue</span></div>' +
+      '<p class="note">Vos articles sont retirés de la vitrine. ' +
+      'Contactez Boutique Lakay.</p></div>';
+  }
+  return '';
+}
+
 async function rendre() {
   Array.prototype.forEach.call(document.querySelectorAll('.ong'), function (b) {
     b.setAttribute('aria-selected', b.getAttribute('data-ong') === onglet);
   });
+  const avis = bandeauBoutique();
+  if (avis) {
+    el('panneau').innerHTML = '<div class="pile">' + avis + '</div>';
+    if (!boutique || boutique.statut !== 'verifiee') return;
+  }
   if (onglet === 'preparer') await rendrePreparer();
   if (onglet === 'catalogue') await rendreCatalogue();
   if (onglet === 'argent') await rendreArgent();
@@ -278,4 +309,4 @@ EQUIPE.brancher(['vendeur', 'admin'], async function () {
   boutique = await API.maBoutique().catch(function () { return null; });
   categories = (await API.categories().catch(function () { return { data: [] }; })).data || [];
   await rendre();
-});
+}, { ouAvecBoutique: true });

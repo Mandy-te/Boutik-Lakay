@@ -109,6 +109,7 @@ const EQUIPE = (function () {
   let rolesAutorises = [];
   let surConnexion = null;
   let monRole = null;
+  let ouAvecBoutique = false;
 
   function montrer(vue) {
     ['login', 'refus', 'app'].forEach(function (v) {
@@ -126,12 +127,24 @@ const EQUIPE = (function () {
 
   async function ouvrir() {
     monRole = await OPS.monRole();
-    if (rolesAutorises.indexOf(monRole) === -1) {
+
+    // Un vendeur fraîchement inscrit n'a pas encore le rôle : sa boutique
+    // attend d'être vérifiée. L'enfermer dehors lui ferait croire à une
+    // panne, alors qu'il doit justement pouvoir suivre sa demande.
+    let proprietaire = false;
+    if (ouAvecBoutique && rolesAutorises.indexOf(monRole) === -1) {
+      proprietaire = !!(await API.maBoutique().catch(function () { return null; }));
+    }
+
+    if (!proprietaire && rolesAutorises.indexOf(monRole) === -1) {
       const t = el('refusTxt');
       if (t) {
         t.textContent = monRole
           ? 'Ce compte est ' + nomRole(monRole) + '. Cet écran est réservé ' +
-            'aux comptes ' + rolesAutorises.map(nomRole).join(' ou ') + '.'
+            'aux comptes ' + rolesAutorises.map(nomRole).join(' ou ') + '.' +
+            (ouAvecBoutique
+              ? ' Si vous venez de vous inscrire comme vendeur, votre boutique ' +
+                'doit d\u2019abord être rattachée à ce compte par un agent.' : '')
           : 'Aucun profil trouvé pour ce compte.';
       }
       const a = el('refusAutre');
@@ -143,9 +156,10 @@ const EQUIPE = (function () {
     if (surConnexion) await surConnexion(monRole);
   }
 
-  function brancher(roles, auDemarrage) {
+  function brancher(roles, auDemarrage, options) {
     rolesAutorises = roles;
     surConnexion = auDemarrage;
+    ouAvecBoutique = !!(options && options.ouAvecBoutique);
 
     document.addEventListener('click', function (ev) {
       const c = ev.target;

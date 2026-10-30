@@ -78,6 +78,7 @@ voyant exactement ce qu'il voit.
 | `vendeur.html` | Vendeurs | Préparer ses commandes, son stock, son argent |
 | `agent.html` | Agents | Appels, embarquement, remise au client |
 | `admin.html` | Administration | Tout le reste |
+| `devenir-vendeur.html` | Futurs vendeurs | Inscription libre, sans compte préalable |
 
 **Espace vendeur** — ses commandes à préparer, et deux étapes qu'il est le seul
 à pouvoir déclarer : « je prépare » et « c'est prêt ». Il ajuste ses stocks et
@@ -93,6 +94,24 @@ pour les appels.
 
 **Administration** — tableau de bord, boutiques, catalogue complet, catégories,
 points de retrait et tarifs, règlements des vendeurs, comptes et rôles.
+
+### Le lien à envoyer à un vendeur
+
+**`devenir-vendeur.html`** — par exemple
+`https://mandy-te.github.io/Boutik-Lakay/devenir-vendeur.html`
+
+Le vendeur s'inscrit seul depuis son téléphone : son nom, son numéro, un code
+secret à 6 chiffres, puis sa boutique et ses pièces. Rien n'est visible des
+acheteurs tant qu'un agent n'a pas vérifié.
+
+L'inscription ne donne ni le rôle vendeur ni la mise en vitrine : la boutique
+naît « en attente », et un compte ne peut pas se promouvoir lui-même — la base
+le refuse, pas seulement l'écran. Dans Administration → Boutiques, tu consultes
+ses pièces et tu vérifies. Dans Comptes, tu lui donnes le rôle `vendeur`.
+
+Les pièces (patente, pièce d'identité) vont dans un stockage privé, un dossier
+par compte. Le vendeur ne voit que les siennes ; l'équipe les ouvre par un lien
+signé valable une heure. Elles ne sont jamais exposées publiquement.
 
 ### Rattacher une boutique à son vendeur
 

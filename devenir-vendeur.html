@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vendre sur Boutique Lakay</title>
+<meta name="description" content="Ouvrez votre boutique sur Boutique Lakay. Inscription en quelques minutes depuis votre téléphone.">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="ui.css">
+<style>
+  .etape{display:flex;gap:11px;align-items:flex-start;padding-block:7px}
+  .etape b{flex:none;width:22px;height:22px;border-radius:50%;background:var(--brand);
+    color:var(--brand-ink);font-size:12px;display:grid;place-items:center;font-weight:700}
+  .etape span{font-size:13.5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <span class="mark">Boutique Lakay</span>
+    <span class="tag">VENDRE</span>
+    <span class="spacer"></span>
+    <a class="lien" href="index.html">La boutique</a>
+  </div>
+</header>
+
+<main>
+  <!-- Inscription -->
+  <section id="vue-form" class="wrap">
+    <div class="sechead"><h2>Ouvrez votre boutique</h2></div>
+    <p class="note">Vos articles visibles par tous les acheteurs du Grand Nord.
+      Vous préparez, Flashipping transporte et encaisse, vous êtes réglé.</p>
+
+    <div class="pile">
+      <div class="bloc">
+        <div class="titreligne"><h2>Comment ça marche</h2></div>
+        <div class="etape"><b>1</b><span>Vous remplissez ce formulaire.</span></div>
+        <div class="etape"><b>2</b><span>Vous déposez votre patente et votre pièce
+          d’identité.</span></div>
+        <div class="etape"><b>3</b><span>Un agent vérifie et vous appelle.</span></div>
+        <div class="etape"><b>4</b><span>Nous photographions et publions vos articles.</span></div>
+      </div>
+
+      <div class="bloc">
+        <div class="titreligne"><h2>Vous</h2></div>
+        <div class="champ"><label for="vNom">Votre nom</label>
+          <input id="vNom" autocomplete="name" placeholder="Mirèy Joseph"></div>
+        <div class="champ"><label for="vTel">Téléphone</label>
+          <input id="vTel" type="tel" inputmode="tel" autocomplete="username"
+                 placeholder="3132 4336"></div>
+        <div class="champ"><label for="vPin">Code secret (6 chiffres)</label>
+          <input id="vPin" type="password" inputmode="numeric" maxlength="6"
+                 autocomplete="new-password"></div>
+        <div class="champ"><label for="vMail">Adresse e-mail (facultatif)</label>
+          <input id="vMail" type="email" inputmode="email" autocomplete="email"></div>
+        <p class="note">Votre numéro est votre identifiant. Le code secret vous
+          permet de revenir depuis n’importe quel téléphone.</p>
+      </div>
+
+      <div class="bloc">
+        <div class="titreligne"><h2>Votre boutique</h2></div>
+        <div class="champ"><label for="vBoutique">Nom de la boutique</label>
+          <input id="vBoutique" placeholder="Kay Mirèy"></div>
+        <div class="champ"><label for="vCommune">Commune</label>
+          <input id="vCommune" placeholder="Cap-Haïtien"></div>
+        <p class="note">La commune décide du tarif de livraison depuis chez vous :
+          indiquez bien celle où se trouvent vos articles.</p>
+        <div class="champ"><label for="vRepere">Point de repère</label>
+          <input id="vRepere" placeholder="Rue 10 J, près de…"></div>
+        <div class="champ"><label for="vQuoi">Ce que vous vendez</label>
+          <textarea id="vQuoi" rows="5"
+            placeholder="Habillement femme, cosmétiques faits main…"></textarea></div>
+      </div>
+
+      <div id="formErr"></div>
+      <button class="cta" id="creer">Créer ma boutique</button>
+      <p class="note">Déjà inscrit ? <a href="gestion.html">Connectez-vous ici.</a></p>
+    </div>
+  </section>
+
+  <!-- Pièces justificatives -->
+  <section id="vue-pieces" class="wrap" hidden>
+    <div class="sechead"><h2>Vos pièces</h2></div>
+    <p class="note">Dernière étape. Un agent les vérifie avant de mettre votre
+      boutique en vitrine. Elles restent privées : seule l’équipe de Boutique
+      Lakay peut les consulter.</p>
+    <div class="pile">
+      <div class="bloc">
+        <div class="champ"><label for="docId">Pièce d’identité</label>
+          <input id="docId" type="file"
+                 accept="image/jpeg,image/png,image/webp,application/pdf"></div>
+        <div id="msgId"></div>
+      </div>
+      <div class="bloc">
+        <div class="champ"><label for="docPatente">Patente</label>
+          <input id="docPatente" type="file"
+                 accept="image/jpeg,image/png,image/webp,application/pdf"></div>
+        <div id="msgPatente"></div>
+      </div>
+      <button class="cta" id="termine">J’ai terminé</button>
+      <p class="note">Vous pourrez aussi les déposer plus tard depuis votre espace.</p>
+    </div>
+  </section>
+
+  <!-- Confirmation -->
+  <section id="vue-fin" class="wrap" hidden>
+    <div class="sechead"><h2>C’est envoyé</h2></div>
+    <div class="pile">
+      <div class="bloc">
+        <p class="note" id="finTxt"></p>
+        <a class="cta" href="vendeur.html"
+           style="display:block;text-align:center;text-decoration:none">Mon espace vendeur</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="ops.js"></script>
+<script src="equipe.js"></script>
+<script src="devenir-vendeur.js"></script>
+</body>
+</html>

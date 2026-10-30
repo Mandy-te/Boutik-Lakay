@@ -1079,6 +1079,12 @@ document.addEventListener('click', async function (ev) {
     return;
   }
 
+  if (c.hasAttribute('data-doc')) {
+    await agir(c, null, function () { return OPS.lienDocument(c.getAttribute('data-doc')); },
+      function (url) { if (url) window.open(url, '_blank', 'noopener'); });
+    return;
+  }
+
   if (c.hasAttribute('data-regler')) {
     const b = c.getAttribute('data-regler');
     const ids = aRegler.filter(function (l) { return l.boutique === b && !l.regle; })

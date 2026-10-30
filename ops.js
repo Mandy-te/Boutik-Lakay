@@ -20,12 +20,19 @@ const OPS = (function () {
      donc d'abord quitter cette session anonyme, sinon il reste
      identifié comme un acheteur sans droits.                 */
 
-  async function connexion(email, motdepasse) {
+  /* On accepte une adresse e-mail OU un numéro de téléphone. Un vendeur
+     s'inscrit avec son numéro et un code à 6 chiffres, comme un acheteur ;
+     les agents et l'administration utilisent une adresse. Les deux
+     arrivent ici, et la conversion du numéro en identifiant interne se
+     fait au même endroit que pour les acheteurs. */
+  async function connexion(identifiant, motdepasse) {
+    const id = String(identifiant || '').trim();
+    const courriel = API.telValide(id) ? API.identifiantInterne(id) : id;
     try { await sb().auth.signOut(); } catch (e) {}
     const { data, error } = await sb().auth.signInWithPassword({
-      email: email, password: motdepasse
+      email: courriel, password: motdepasse
     });
-    if (error) throw error;
+    if (error) throw new Error('Identifiant ou mot de passe incorrect.');
     return data.user;
   }
 
@@ -467,6 +474,16 @@ const OPS = (function () {
     return data;
   }
 
+  /* Les pièces sont dans un bucket privé : il faut une adresse signée,
+     valable une heure. On ne les expose jamais en clair. */
+  async function lienDocument(chemin) {
+    if (!chemin) return null;
+    const { data, error } = await sb().storage.from('documents')
+      .createSignedUrl(chemin, 3600);
+    if (error) return null;
+    return data.signedUrl;
+  }
+
   async function transfererBoutique(boutiqueId, profilId) {
     const { error } = await sb().from('boutiques')
       .update({ proprietaire: profilId }).eq('id', boutiqueId);
@@ -625,6 +642,7 @@ const OPS = (function () {
     supprimerMedia: supprimerMedia,
     publier: publier, depublier: depublier,
     profilsParRole: profilsParRole, transfererBoutique: transfererBoutique,
+    lienDocument: lienDocument,
     definirRole: definirRole, duAuxVendeurs: duAuxVendeurs,
     reglerBoutique: reglerBoutique, soldes: soldes,
     commandesAPreparer: commandesAPreparer,
