@@ -20,7 +20,7 @@ let categories = [];
 let produitEnEdition = null;
 let remplace = null;   // pièce dont on veut déposer une nouvelle version
 let plans = [];
-let axesEnPlus = {};   // axes supplémentaires ouverts par produit
+let derniereSaisie = {};   // dernière variante saisie, pour enchaîner
 
 /* ---------- À préparer ----------------------------------- */
 
@@ -158,19 +158,6 @@ function etatProduit(p) {
   return { c: 'gris', mot: 'Brouillon' };
 }
 
-/* Les axes d'un produit : taille, couleur, contenance… On ne les fige
-   pas, chaque produit déclare les siens. Un vêtement en a deux, un
-   cremas un seul, un article unique aucun. */
-function axesDe(p) {
-  const vus = [];
-  (p.variantes || []).forEach(function (v) {
-    Object.keys(v.attributs || {}).forEach(function (k) {
-      if (vus.indexOf(k) === -1) vus.push(k);
-    });
-  });
-  return vus;
-}
-
 function blocMedias(p) {
   const med = (p.medias || []).slice()
     .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
@@ -198,18 +185,52 @@ function blocMedias(p) {
       }) + '<div class="progres" id="prog-' + esc(p.id) + '"></div>');
 }
 
+/* Valeurs courantes par axe : taper « S » ou « Rouge » doit être une
+   suggestion, pas une dictée. Le vendeur reste libre d'écrire autre
+   chose — c'est une aide, pas une liste fermée. */
+const SUGGESTIONS = {
+  'taille':      ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  'pointure':    ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'],
+  'couleur':     ['Noir', 'Blanc', 'Rouge', 'Bleu', 'Vert', 'Jaune', 'Rose', 'Gris', 'Marron'],
+  'contenance':  ['50 ml', '100 ml', '250 ml', '500 ml', '1 L'],
+  'poids':       ['250 g', '500 g', '1 kg'],
+  'matiere':     ['Coton', 'Lin', 'Polyester', 'Cuir', 'Jean']
+};
+
+const AXES_COURANTS = ['Taille', 'Couleur', 'Pointure', 'Contenance', 'Poids', 'Matière'];
+
+function sansAccent(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function suggestionsDe(axe, p) {
+  const base = SUGGESTIONS[sansAccent(axe)] || [];
+  // On y ajoute ce que le vendeur a déjà utilisé sur ce produit.
+  const vues = [];
+  (p.variantes || []).forEach(function (v) {
+    const x = (v.attributs || {})[axe];
+    if (x && base.indexOf(x) === -1 && vues.indexOf(x) === -1) vues.push(x);
+  });
+  return base.concat(vues);
+}
+
+/* Deux temps nettement séparés :
+   1. déclarer les déclinaisons du produit (Taille, Couleur…)
+   2. saisir les variantes, un champ par déclinaison
+   Les mélanger — ce que je faisais — donne un formulaire où l'on ne
+   sait plus ce qu'on remplit. */
 function blocVariantes(p) {
   const figee = p.statut === 'en_revision' || p.statut === 'publie';
-  const axes = axesDe(p);
+  const axes = p.axes || [];
   const vs = (p.variantes || []).slice();
 
   const lignes = vs.map(function (v) {
     const att = v.attributs || {};
-    const desc = axes.length
-      ? axes.map(function (k) { return esc(k) + ' : ' + esc(att[k] || '\u2014'); }).join(' \u00b7 ')
+    const titre = axes.length
+      ? axes.map(function (k) { return esc(att[k] || '\u2014'); }).join(' \u00b7 ')
       : esc(v.libelle);
     return '<div class="vrow">' +
-      '<div class="champ lib"><label>' + desc + '</label>' +
+      '<div class="champ lib"><label>' + titre + '</label>' +
         '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
         '" data-vstock="' + esc(v.id) + '"></div>' +
       '<div class="champ"><label>Prix (HTG)</label>' +
@@ -223,39 +244,65 @@ function blocVariantes(p) {
 
   if (figee) {
     return lignes + '<p class="note">Vous pouvez toujours ajuster vos stocks. ' +
-      'Les prix et les variantes se modifient quand la fiche est en brouillon.</p>';
+      'Les prix et les déclinaisons se modifient quand la fiche est en brouillon.</p>';
   }
 
-  // Saisie d'une nouvelle variante : un champ par axe déjà déclaré,
-  // plus la possibilité d'en ajouter un (Taille, Couleur, Contenance…).
-  const sup = axesEnPlus[p.id] || 0;
-  const liste = axes.slice();
-  for (let n = 0; n < sup + (axes.length ? 0 : 1); n++) liste.push('');
-  const champsAxes = liste.map(function (k, i) {
-    return '<div class="champ"><label>' + (k ? esc(k) : 'Axe (ex. Taille)') + '</label>' +
-      (k
-        ? '<input id="na-val-' + esc(p.id) + '-' + i + '" data-axe="' + esc(k) + '" ' +
-          'placeholder="M, Rouge\u2026">'
-        : '<input id="na-nom-' + esc(p.id) + '-' + i + '" placeholder="Taille">') + '</div>' +
-      (k ? '' : '<div class="champ"><label>Valeur</label>' +
-        '<input id="na-val-' + esc(p.id) + '-' + i + '" placeholder="M"></div>');
-  }).join('');
+  // --- 1. Les déclinaisons du produit ---
+  const restants = AXES_COURANTS.filter(function (a) { return axes.indexOf(a) === -1; });
+  const blocAxes =
+    '<div class="sechead"><h2 style="font-size:13px">Déclinaisons</h2></div>' +
+    (axes.length
+      ? '<div class="rangee">' + axes.map(function (a) {
+          return '<span class="pill att">' + esc(a) +
+            ' <button class="sup" style="padding:0 4px;border:0;background:none" ' +
+            'data-supaxe="' + esc(a) + '" data-prod="' + esc(p.id) +
+            '" aria-label="Retirer ' + esc(a) + '">\u00d7</button></span>';
+        }).join('') + '</div>'
+      : '<p class="note">Aucune : cet article se vend tel quel. ' +
+        'Ajoutez-en une s\u2019il existe en plusieurs tailles, couleurs ou contenances.</p>') +
+    '<div class="vrow">' +
+      '<div class="champ lib"><label for="ax-' + esc(p.id) + '">Ajouter une déclinaison</label>' +
+        '<input id="ax-' + esc(p.id) + '" list="axl-' + esc(p.id) + '" placeholder="Taille">' +
+        '<datalist id="axl-' + esc(p.id) + '">' +
+          restants.map(function (a) { return '<option value="' + esc(a) + '">'; }).join('') +
+        '</datalist></div>' +
+      '<button class="mini" data-ajaxe="' + esc(p.id) + '">Ajouter</button>' +
+    '</div>';
 
-  return lignes +
-    '<div class="vrow">' + champsAxes +
-      '<div class="champ"><label>Prix (HTG)</label>' +
+  // --- 2. La saisie d'une variante ---
+  const champsValeurs = axes.length
+    ? axes.map(function (a, i) {
+        const sug = suggestionsDe(a, p);
+        return '<div class="champ"><label for="nv-' + esc(p.id) + '-' + i + '">' +
+          esc(a) + '</label>' +
+          '<input id="nv-' + esc(p.id) + '-' + i + '" data-axe="' + esc(a) + '" ' +
+          'list="sg-' + esc(p.id) + '-' + i + '" placeholder="' +
+          esc(sug[0] || '') + '">' +
+          '<datalist id="sg-' + esc(p.id) + '-' + i + '">' +
+            sug.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') +
+          '</datalist></div>';
+      }).join('')
+    : '';
+
+  const blocSaisie =
+    '<div class="sechead"><h2 style="font-size:13px">' +
+      (axes.length ? 'Ajouter une variante' : 'Stock de cet article') + '</h2></div>' +
+    '<div class="vrow">' + champsValeurs +
+      '<div class="champ"><label for="nv-stock-' + esc(p.id) + '">Quantité</label>' +
+        '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
+      '<div class="champ"><label for="nv-prix-' + esc(p.id) + '">Prix (HTG)</label>' +
         '<input id="nv-prix-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
         esc(enGourdes(p.prix)) + '"></div>' +
-      '<div class="champ"><label>Stock</label>' +
-        '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
     '</div>' +
-    (axes.length
-      ? '<button class="mini" data-ajaxe="' + esc(p.id) + '">Ajouter un autre axe</button> '
-      : '') +
-    '<button class="mini" data-ajvar="' + esc(p.id) + '">Ajouter cette variante</button>' +
-    '<p class="note">Un vêtement se décline souvent en taille ET en couleur. ' +
-      'Un article sans déclinaison n\u2019a besoin d\u2019aucun axe : laissez vide. ' +
-      'Prix vide = celui du produit.</p>';
+    '<button class="mini" data-ajvar="' + esc(p.id) + '">' +
+      (axes.length ? 'Ajouter cette variante' : 'Enregistrer le stock') + '</button>' +
+    '<p class="note">' + (axes.length
+      ? 'Exemple : Taille <strong>S</strong>, Couleur <strong>Rouge</strong>, ' +
+        'quantité <strong>10</strong>. Les valeurs restent après l\u2019ajout : ' +
+        'changez juste la taille pour enchaîner. Prix vide = celui du produit.'
+      : 'Prix vide = celui du produit.') + '</p>';
+
+  return lignes + blocAxes + blocSaisie;
 }
 
 function formProduit(p) {
@@ -383,6 +430,23 @@ async function rechargerProduits() {
   if (z) z.innerHTML = produits.length
     ? produits.map(carteProduit).join('')
     : '<p class="empty">Aucun article. Créez le premier ci-dessus.</p>';
+  rappelerSaisie();
+}
+
+/* Remet les valeurs de la dernière variante ajoutée : enchaîner
+   S, M, L dans la même couleur ne doit demander qu\u2019une frappe. */
+function rappelerSaisie() {
+  Object.keys(derniereSaisie).forEach(function (id) {
+    const p = produits.filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    const d = derniereSaisie[id];
+    (p.axes || []).forEach(function (a, i) {
+      const champ = el('nv-' + id + '-' + i);
+      if (champ && d.attributs[a]) champ.value = d.attributs[a];
+    });
+    const px = el('nv-prix-' + id);
+    if (px && d.prix) px.value = d.prix;
+  });
 }
 
 /* ---------- Mon argent ------------------------------------ */
@@ -563,22 +627,62 @@ document.addEventListener('click', async function (ev) {
     return;
   }
 
-  // Un axe de plus : taille, puis couleur, puis ce qu'on veut.
+  // Déclarer une déclinaison : Taille, Couleur, Contenance…
   if (c.hasAttribute('data-ajaxe')) {
     const id = c.getAttribute('data-ajaxe');
-    axesEnPlus[id] = (axesEnPlus[id] || 0) + 1;
-    await rechargerProduits();
+    const nom = val('ax-' + id);
+    if (!nom) { msg('msg-' + id, 'Écrivez le nom de la déclinaison : Taille, Couleur\u2026', 'ko'); return; }
+    const p = produits.filter(function (x) { return x.id === id; })[0];
+    const axes = (p && p.axes) ? p.axes.slice() : [];
+    if (axes.some(function (a) { return sansAccent(a) === sansAccent(nom); })) {
+      msg('msg-' + id, 'Cette déclinaison existe déjà.', 'ko');
+      return;
+    }
+    axes.push(nom);
+    await agir(c, 'msg-' + id, function () { return OPS.majProduit(id, { axes: axes }); },
+      rechargerProduits);
+    return;
+  }
+
+  // Retirer une déclinaison : refusé s'il existe déjà des variantes,
+  // sinon leurs valeurs deviendraient orphelines sans qu'on le voie.
+  if (c.hasAttribute('data-supaxe')) {
+    const id = c.getAttribute('data-prod');
+    const axe = c.getAttribute('data-supaxe');
+    const p = produits.filter(function (x) { return x.id === id; })[0];
+    if (p && (p.variantes || []).length) {
+      msg('msg-' + id, 'Supprimez d\u2019abord les variantes : elles utilisent cette déclinaison.', 'ko');
+      return;
+    }
+    const axes = ((p && p.axes) || []).filter(function (a) { return a !== axe; });
+    await agir(c, 'msg-' + id, function () { return OPS.majProduit(id, { axes: axes }); },
+      rechargerProduits);
     return;
   }
 
   if (c.hasAttribute('data-ajvar')) {
     const id = c.getAttribute('data-ajvar');
-    const attributs = lireAxes(id);
+    const p = produits.filter(function (x) { return x.id === id; })[0];
+    const axes = (p && p.axes) || [];
+    const attributs = {};
+    let manque = null;
+    axes.forEach(function (a, i) {
+      const v = val('nv-' + id + '-' + i);
+      if (!v) { if (!manque) manque = a; return; }
+      attributs[a] = v;
+    });
+    if (manque) { msg('msg-' + id, 'Indiquez la valeur pour « ' + manque + ' ».', 'ko'); return; }
+
     const prix = enCentimes(val('nv-prix-' + id));
     const stock = val('nv-stock-' + id);
     await agir(c, 'msg-' + id, function () {
       return OPS.ajouterVariante(id, '', prix, stock, attributs);
-    }, async function () { axesEnPlus[id] = 0; await rechargerProduits(); });
+    }, async function () {
+      // On garde les valeurs saisies : ajouter S puis M puis L ne doit
+      // pas obliger à retaper la couleur à chaque fois.
+      derniereSaisie[id] = { attributs: attributs, prix: val('nv-prix-' + id) };
+      await rechargerProduits();
+    });
     return;
   }
 
@@ -625,24 +729,6 @@ document.addEventListener('click', async function (ev) {
   }
 });
 
-/* Lecture des axes saisis : un produit peut en avoir zéro, un ou
-   plusieurs. On ne garde que ceux qui portent une valeur. */
-function lireAxes(produitId) {
-  const att = {};
-  const champs = document.querySelectorAll('[id^="na-val-' + produitId + '-"]');
-  Array.prototype.forEach.call(champs, function (input) {
-    const i = input.id.split('-').pop();
-    const valeur = (input.value || '').trim();
-    if (!valeur) return;
-    let nom = input.getAttribute('data-axe');
-    if (!nom) {
-      const champNom = el('na-nom-' + produitId + '-' + i);
-      nom = champNom ? (champNom.value || '').trim() : '';
-    }
-    if (nom) att[nom] = valeur;
-  });
-  return att;
-}
 
 document.addEventListener('change', async function (ev) {
   const c = ev.target;

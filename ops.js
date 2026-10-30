@@ -290,6 +290,7 @@ const OPS = (function () {
       description: champs.description || null,
       prix: champs.prix,                 // centimes
       prepaiement_exige: !!champs.prepaiement_exige,
+      axes: champs.axes || [],
       statut: 'brouillon'                // la publication est une étape à part
     };
     const { data, error } = await sb().from('produits').insert(corps).select().single();
