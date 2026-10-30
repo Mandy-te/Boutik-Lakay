@@ -84,6 +84,88 @@ const ADMIN = (function () {
     if (error) throw error;
   }
 
+  // Corriger une erreur de saisie : nom, commune, repère, description.
+  // La commune n'est pas cosmétique — c'est elle qui décide du tarif
+  // de livraison depuis cette boutique.
+  async function majBoutique(id, champs) {
+    const { error } = await sb().from('boutiques').update(champs).eq('id', id);
+    if (error) throw error;
+  }
+
+  /* ---------- Points de retrait et tarifs ------------------
+     Le tarif dépend du couple (commune du vendeur, point de
+     retrait) : un achat au Cap livré au Cap ne coûte pas ce
+     que coûte un colis venu de Ouanaminthe.                 */
+
+  async function tousPoints() {
+    const { data, error } = await sb().from('points_retrait')
+      .select('*, tarifs:tarifs_livraison(id, commune_origine, frais, note)')
+      .order('commune');
+    if (error) throw error;
+    return data;
+  }
+
+  async function creerPoint(champs) {
+    const { data, error } = await sb().from('points_retrait').insert({
+      nom: champs.nom, commune: champs.commune, repere: champs.repere,
+      telephone: champs.telephone || null,
+      frais: champs.frais, actif: true
+    }).select().single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function majPoint(id, champs) {
+    const { error } = await sb().from('points_retrait').update(champs).eq('id', id);
+    if (error) throw error;
+  }
+
+  // Un point déjà utilisé par une commande est protégé par sa clé
+  // étrangère : on le désactive plutôt que de trouer l'historique.
+  async function supprimerPoint(id) {
+    const { error } = await sb().from('points_retrait').delete().eq('id', id);
+    if (error) {
+      if (String(error.code) === '23503') {
+        throw new Error('Ce point a déjà reçu des commandes : il ne peut pas être ' +
+          'supprimé sans trouer l’historique. Désactive-le à la place.');
+      }
+      throw error;
+    }
+  }
+
+  async function creerTarif(pointId, commune, frais, note) {
+    const { data, error } = await sb().from('tarifs_livraison').insert({
+      point_retrait: pointId, commune_origine: commune, frais: frais, note: note || null
+    }).select().single();
+    if (error) {
+      if (String(error.message).indexOf('duplicate') !== -1) {
+        throw new Error('Un tarif existe déjà pour cette commune vers ce point.');
+      }
+      throw error;
+    }
+    return data;
+  }
+
+  async function majTarif(id, champs) {
+    const { error } = await sb().from('tarifs_livraison').update(champs).eq('id', id);
+    if (error) throw error;
+  }
+
+  async function supprimerTarif(id) {
+    const { error } = await sb().from('tarifs_livraison').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // Les communes où se trouvent les vendeurs : ce sont celles pour
+  // lesquelles un tarif a un sens.
+  async function communesVendeurs() {
+    const { data, error } = await sb().from('boutiques').select('commune');
+    if (error) return [];
+    const vues = {};
+    (data || []).forEach(function (b) { if (b.commune) vues[b.commune.trim()] = 1; });
+    return Object.keys(vues).sort();
+  }
+
   async function plans() {
     const { data, error } = await sb().from('plans').select('*').order('commission_bps', { ascending: false });
     if (error) throw error;
@@ -370,14 +452,16 @@ const ADMIN = (function () {
   const CHAMPS = 'id, reference, statut, total, cree_le, confirme_tel_le, arrive_le, ' +
     'expire_le, retire_le, point:points_retrait(nom, commune), ' +
     'acheteur:profiles(nom, telephone, abandons), ' +
-    'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire)';
+    'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire, ' +
+    'boutique:boutiques(nom, commune))';
 
   // Les commandes qui attendent un geste de l'équipe, les plus vieilles
   // d'abord : c'est l'ordre dans lequel un comptoir travaille.
   async function commandesOuvertes() {
     const { data, error } = await sb().from('commandes')
       .select(CHAMPS)
-      .in('statut', ['recue', 'payee', 'fonds_bloques', 'au_point_retrait'])
+      .in('statut', ['recue', 'confirmee', 'en_preparation', 'prete', 'en_transit',
+                     'payee', 'fonds_bloques', 'au_point_retrait', 'code_valide'])
       .order('cree_le', { ascending: true });
     if (error) throw error;
     return data;
@@ -390,16 +474,50 @@ const ADMIN = (function () {
     return data;
   }
 
-  async function confirmerTelephone(id) {
-    const { error } = await sb().rpc('confirmer_telephone', { p_commande: id });
-    if (error) throw error;
+  /* La chaîne de suivi. Les étapes sont déclarées ici une fois et
+     servent partout : boutons de l'agent, libellés, ordre.
+     Reculer est impossible, la base le refuse. */
+  const ETAPES = [
+    { code: 'recue',            nom: 'Commande reçue' },
+    { code: 'confirmee',        nom: 'Confirmée par téléphone' },
+    { code: 'en_preparation',   nom: 'En préparation chez le vendeur' },
+    { code: 'prete',            nom: 'Prête — en attente du livreur' },
+    { code: 'en_transit',       nom: 'Embarquée vers le point de retrait' },
+    { code: 'au_point_retrait', nom: 'Arrivée au point de retrait' },
+    { code: 'code_valide',      nom: 'Payée et retirée' },
+    { code: 'cloturee',         nom: 'Terminée — vendeur réglé' }
+  ];
+
+  function rangEtape(statut) {
+    for (let i = 0; i < ETAPES.length; i++) if (ETAPES[i].code === statut) return i;
+    if (statut === 'payee' || statut === 'fonds_bloques') return 4;
+    if (statut === 'fonds_liberes') return 6;
+    return -1; // litige, remboursée, abandonnée : hors chaîne
   }
 
-  async function marquerArrivee(id) {
-    const { data, error } = await sb().rpc('marquer_arrivee', { p_commande: id });
+  // Les étapes que l'agent peut encore déclencher. "Payée et retirée"
+  // n'y figure pas : elle exige le code du client.
+  function etapesSuivantes(statut) {
+    const r = rangEtape(statut);
+    if (r < 0) return [];
+    return ETAPES.filter(function (e, i) {
+      if (i <= r) return false;
+      if (e.code === 'code_valide') return false;
+      if (e.code === 'cloturee') return statut === 'code_valide';
+      return true;
+    });
+  }
+
+  async function avancerCommande(id, statut) {
+    const { data, error } = await sb().rpc('avancer_commande', {
+      p_commande: id, p_statut: statut
+    });
     if (error) throw error;
     return data;
   }
+
+  async function confirmerTelephone(id) { return avancerCommande(id, 'confirmee'); }
+  async function marquerArrivee(id) { return avancerCommande(id, 'au_point_retrait'); }
 
   async function validerRetrait(id, code, moyen) {
     const { data, error } = await sb().rpc('valider_retrait', {
@@ -421,8 +539,13 @@ const ADMIN = (function () {
     connexion: connexion, deconnexion: deconnexion,
     monRole: monRole, estEquipe: estEquipe,
     toutesBoutiques: toutesBoutiques, creerBoutique: creerBoutique,
-    majStatutBoutique: majStatutBoutique, plans: plans, definirPlan: definirPlan,
-    slugifier: slugifier,
+    majStatutBoutique: majStatutBoutique, majBoutique: majBoutique,
+    plans: plans, definirPlan: definirPlan, slugifier: slugifier,
+    tousPoints: tousPoints, creerPoint: creerPoint, majPoint: majPoint,
+    supprimerPoint: supprimerPoint, creerTarif: creerTarif, majTarif: majTarif,
+    supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
+    ETAPES: ETAPES, rangEtape: rangEtape, etapesSuivantes: etapesSuivantes,
+    avancerCommande: avancerCommande,
     toutesCategories: toutesCategories, creerCategorie: creerCategorie,
     majCategorie: majCategorie, basculerCategorie: basculerCategorie,
     produitsBoutique: produitsBoutique, creerProduit: creerProduit,

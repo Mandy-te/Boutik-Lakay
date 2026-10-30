@@ -35,8 +35,11 @@ const T = {
     codeDevice:'Ce code est gardé sur cet appareil. Un agent peut le retrouver si vous le perdez.',
     delay:'Vous avez 72 heures après l’arrivée du colis pour venir le retirer.',
     trackBtn:'Suivre ma commande', backHome:'Retour à l’accueil',
-    st1:'Commande reçue', st2:'Confirmée par téléphone', st3:'Colis au point de retrait',
-    st4:'Payé et retiré', st5:'Terminée',
+    st1:'Commande reçue', st2:'Confirmée par téléphone',
+    st3:'En préparation chez le vendeur', st4:'Prête — en attente du livreur',
+    st5:'Embarquée vers le point de retrait', st6:'Arrivée au point de retrait',
+    st7:'Payée et retirée', st8:'Terminée',
+    pillPrep2:'En préparation', pillTransit:'En route',
     pillAtt:'En préparation', pillReady:'À retirer', pillDone:'Terminée', pillKo:'Annulée',
     orderOf:'Commande du', offline:'Hors ligne — affichage du dernier catalogue connu.',
     stale:'Catalogue peut-être ancien. Reconnectez-vous pour le rafraîchir.',
@@ -71,8 +74,11 @@ const T = {
     codeDevice:'Kòd la rete sou aparèy sa a. Yon ajan ka jwenn li si w pèdi l.',
     delay:'Ou gen 72 è apre kolis la rive pou vin pran l.',
     trackBtn:'Swiv kòmand mwen', backHome:'Tounen nan akèy',
-    st1:'Nou resevwa kòmand lan', st2:'Konfime nan telefòn', st3:'Kolis la nan pwen retrè a',
-    st4:'Peye epi pran', st5:'Fini',
+    st1:'Nou resevwa kòmand lan', st2:'Konfime nan telefòn',
+    st3:'Machann lan ap prepare l', st4:'Pare — n ap tann livrè a',
+    st5:'Sou wout pwen retrè a', st6:'Rive nan pwen retrè a',
+    st7:'Peye epi pran', st8:'Fini',
+    pillPrep2:'N ap prepare', pillTransit:'Sou wout',
     pillAtt:'N ap prepare', pillReady:'Pou pran', pillDone:'Fini', pillKo:'Anile',
     orderOf:'Kòmand', offline:'Pa gen entènèt — n ap montre dènye katalòg nou te genyen.',
     stale:'Katalòg la ka vye. Konekte pou rafrechi l.',
@@ -443,20 +449,21 @@ async function rendrePanier() {
 
 /* ---------- Rendu : confirmation -------------------------- */
 
+// Rang d'une etape dans la chaine. Doit rester aligne sur rang_statut()
+// cote base : c'est la meme chaine, vue des deux bouts.
+const CHAINE = ['recue', 'confirmee', 'en_preparation', 'prete',
+                'en_transit', 'au_point_retrait', 'code_valide', 'cloturee'];
+
 function etapes(statut) {
-  const ordre = ['recue', 'payee', 'fonds_bloques', 'au_point_retrait', 'code_valide', 'fonds_liberes'];
-  let i = 0;
-  if (statut === 'recue') i = 0;
-  else if (statut === 'au_point_retrait') i = 2;
-  else if (statut === 'code_valide') i = 3;
-  else if (statut === 'fonds_liberes') i = 4;
-  else if (statut === 'remboursee' || statut === 'abandonnee') i = -1;
-  else i = 1;
-  return i;
+  const i = CHAINE.indexOf(statut);
+  if (i >= 0) return i;
+  if (statut === 'payee' || statut === 'fonds_bloques') return 4;
+  if (statut === 'fonds_liberes') return 6;
+  return -1;   // litige, remboursee, abandonnee : hors chaine
 }
 
 function blocEtapes(statut) {
-  const cles = ['st1', 'st2', 'st3', 'st4', 'st5'];
+  const cles = ['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st8'];
   const pos = etapes(statut);
   return '<div class="steps">' + cles.map(function (k, j) {
     let c = '';

@@ -19,6 +19,9 @@ let categories = [];          // toutes, actives et inactives
 let boutiqueOuverte = null;
 let produits = [];
 let produitEnEdition = null;  // id du produit dont le formulaire est ouvert
+let boutiqueEnEdition = null;
+let points = [];
+let communes = [];
 let occupe = false;
 
 /* ---------- Petits outils -------------------------------- */
@@ -81,9 +84,29 @@ async function agir(bouton, zoneMsg, travail, apres) {
 /* ---------- Onglet Comptoir ------------------------------ */
 
 function etatCommande(o) {
+  const e = ADMIN.ETAPES[ADMIN.rangEtape(o.statut)];
   if (o.statut === 'au_point_retrait') return { c: 'ok', mot: 'À retirer' };
-  if (o.confirme_tel_le) return { c: 'att', mot: 'Confirmée, à expédier' };
-  return { c: 'warn', mot: 'À confirmer par téléphone' };
+  if (o.statut === 'recue') return { c: 'warn', mot: 'À confirmer par téléphone' };
+  return { c: 'att', mot: e ? e.nom : o.statut };
+}
+
+// Les étapes que l'agent peut encore déclencher : la suivante en bouton
+// principal, les autres en raccourcis. Sauter en avant est permis — un
+// agent au comptoir ne cliquera pas cinq fois, et l'y obliger produirait
+// des horodatages faux plutôt qu'un suivi rigoureux.
+function blocAvancer(o) {
+  const suites = ADMIN.etapesSuivantes(o.statut);
+  if (!suites.length) return '';
+  const suivante = suites[0];
+  const autres = suites.slice(1);
+  return '<button class="cta" data-avancer="' + esc(o.id) + '" data-vers="' +
+      esc(suivante.code) + '">' + esc(suivante.nom) + '</button>' +
+    (autres.length
+      ? '<div class="rangee">' + autres.map(function (e) {
+          return '<button class="mini" data-avancer="' + esc(o.id) +
+            '" data-vers="' + esc(e.code) + '">' + esc(e.nom) + '</button>';
+        }).join('') + '</div>'
+      : '');
 }
 
 function carteCommande(o) {
@@ -147,8 +170,10 @@ async function rendreComptoir() {
     p.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
     return;
   }
-  const aRetirer = liste.filter(function (o) { return o.statut === 'au_point_retrait'; });
-  const aPreparer = liste.filter(function (o) { return o.statut !== 'au_point_retrait'; });
+  const aRetirer  = liste.filter(function (o) { return o.statut === 'au_point_retrait'; });
+  const aRegler   = liste.filter(function (o) { return o.statut === 'code_valide'; });
+  const aPreparer = liste.filter(function (o) {
+    return o.statut !== 'au_point_retrait' && o.statut !== 'code_valide'; });
 
   p.innerHTML =
     '<div class="sechead"><h2>Comptoir</h2><span class="eyebrow num">' +
@@ -158,8 +183,12 @@ async function rendreComptoir() {
       ? '<div class="sechead"><h2 style="font-size:14px">Au comptoir</h2></div>' +
         '<div class="pile">' + aRetirer.map(carteCommande).join('') + '</div>' : '') +
     (aPreparer.length
-      ? '<div class="sechead"><h2 style="font-size:14px">À préparer</h2></div>' +
-        '<div class="pile">' + aPreparer.map(carteCommande).join('') + '</div>' : '');
+      ? '<div class="sechead"><h2 style="font-size:14px">En cours</h2></div>' +
+        '<div class="pile">' + aPreparer.map(carteCommande).join('') + '</div>' : '') +
+    (aRegler.length
+      ? '<div class="sechead"><h2 style="font-size:14px">Retirées \u2014 vendeur à régler</h2>' +
+        '<span class="eyebrow num">' + aRegler.length + '</span></div>' +
+        '<div class="pile">' + aRegler.map(carteCommande).join('') + '</div>' : '');
 }
 
 /* ---------- Onglet Catalogue ----------------------------- */
@@ -377,17 +406,41 @@ function planActif(b) {
   return a ? a.plan : null;
 }
 
+function formBoutique(b) {
+  return '<div class="edit">' +
+    '<div class="champ"><label for="b-nom-' + esc(b.id) + '">Nom de la boutique</label>' +
+      '<input id="b-nom-' + esc(b.id) + '" value="' + esc(b.nom) + '"></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="b-com-' + esc(b.id) + '">Commune</label>' +
+        '<input id="b-com-' + esc(b.id) + '" value="' + esc(b.commune) + '"></div>' +
+      '<div class="champ"><label for="b-rep-' + esc(b.id) + '">Point de repère</label>' +
+        '<input id="b-rep-' + esc(b.id) + '" value="' + esc(b.adresse_repere || '') + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="b-desc-' + esc(b.id) + '">Description</label>' +
+      '<textarea id="b-desc-' + esc(b.id) + '" rows="5">' + esc(b.description || '') + '</textarea></div>' +
+    '<p class="note">La commune n\u2019est pas qu\u2019une indication : c\u2019est elle qui ' +
+      'décide du tarif de livraison depuis cette boutique.</p>' +
+    '<button class="cta" data-bsave="' + esc(b.id) + '">Enregistrer</button>' +
+    '<button class="ghost" data-bannuler="' + esc(b.id) + '">Annuler</button>' +
+  '</div>';
+}
+
 function carteBoutique(b) {
   const st = b.statut;
   const plan = planActif(b);
+  const enEdition = boutiqueEnEdition === b.id;
   return '<div class="bloc">' +
     '<div class="titreligne"><h2>' + esc(b.nom) + '</h2>' +
       '<span class="pill ' + (st === 'verifiee' ? 'ok' : (st === 'suspendue' ? 'ko' : 'warn')) + '">' +
       esc(st === 'verifiee' ? 'Vérifiée' : (st === 'suspendue' ? 'Suspendue' : 'En attente')) +
       '</span></div>' +
-    '<div class="ligne"><span>Commune</span><strong>' + esc(b.commune) + '</strong></div>' +
-    (b.adresse_repere ? '<div class="ligne"><span>Repère</span><span>' +
-      esc(b.adresse_repere) + '</span></div>' : '') +
+    (enEdition ? formBoutique(b) :
+      '<div class="ligne"><span>Commune</span><strong>' + esc(b.commune) + '</strong></div>' +
+      (b.adresse_repere ? '<div class="ligne"><span>Repère</span><span>' +
+        esc(b.adresse_repere) + '</span></div>' : '') +
+      (b.description ? '<div class="note">' + esc(b.description) + '</div>' : '') +
+      '<button class="mini" data-bediter="' + esc(b.id) + '">Modifier la boutique</button>'
+    ) +
     '<div class="champ"><label for="plan-' + esc(b.id) + '">Plan</label>' +
       '<select id="plan-' + esc(b.id) + '" data-plan="' + esc(b.id) + '">' +
         '<option value="">— aucun —</option>' +
@@ -494,6 +547,116 @@ async function rendreCategories() {
       'l’app sans rien casser.</p>';
 }
 
+
+/* ---------- Onglet Livraison -----------------------------
+   Points de retrait et tarifs. Le tarif dépend du couple
+   (commune du vendeur, point de retrait) : un achat au Cap
+   livré au Cap ne coûte pas ce que coûte un colis venu de
+   Ouanaminthe. Sans ça, soit tu surfactures le local, soit
+   tu perds de l'argent sur les longues distances.          */
+
+function cartePoint(p) {
+  const tarifs = (p.tarifs || []).slice()
+    .sort(function (a, b) { return a.commune_origine.localeCompare(b.commune_origine); });
+  const dejaFixees = tarifs.map(function (t) { return t.commune_origine.toLowerCase(); });
+  const restantes = communes.filter(function (c) {
+    return dejaFixees.indexOf(c.toLowerCase()) === -1;
+  });
+
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
+      '<span class="pill ' + (p.actif ? 'ok' : 'gris') + '">' +
+      esc(p.actif ? 'Actif' : 'Désactivé') + '</span></div>' +
+
+    '<div class="duo">' +
+      '<div class="champ"><label for="p-nom-' + esc(p.id) + '">Nom</label>' +
+        '<input id="p-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+      '<div class="champ"><label for="p-com-' + esc(p.id) + '">Commune</label>' +
+        '<input id="p-com-' + esc(p.id) + '" value="' + esc(p.commune) + '"></div>' +
+    '</div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="p-rep-' + esc(p.id) + '">Point de repère</label>' +
+        '<input id="p-rep-' + esc(p.id) + '" value="' + esc(p.repere) + '"></div>' +
+      '<div class="champ"><label for="p-tel-' + esc(p.id) + '">Téléphone</label>' +
+        '<input id="p-tel-' + esc(p.id) + '" type="tel" value="' + esc(p.telephone || '') + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="p-frais-' + esc(p.id) + '">Tarif de base (HTG)</label>' +
+      '<input id="p-frais-' + esc(p.id) + '" inputmode="decimal" value="' +
+      esc(enGourdes(p.frais)) + '"></div>' +
+    '<p class="note">Appliqué à toute commune sans tarif particulier ci-dessous.</p>' +
+
+    '<div class="sechead"><h2 style="font-size:13px">Tarifs par commune d\u2019origine</h2></div>' +
+    (tarifs.length ? tarifs.map(function (t) {
+      return '<div class="vrow">' +
+        '<div class="champ lib"><label>Depuis</label>' +
+          '<input value="' + esc(t.commune_origine) + '" data-tcom="' + esc(t.id) + '"></div>' +
+        '<div class="champ"><label>Tarif (HTG)</label>' +
+          '<input inputmode="decimal" value="' + esc(enGourdes(t.frais)) +
+          '" data-tfrais="' + esc(t.id) + '"></div>' +
+        '<button class="sup" data-tsup="' + esc(t.id) + '" aria-label="Supprimer ce tarif">\u00d7</button>' +
+      '</div>';
+    }).join('') : '<p class="note">Aucun tarif particulier : tout part au tarif de base.</p>') +
+
+    '<div class="vrow">' +
+      '<div class="champ lib"><label>Nouvelle commune d\u2019origine</label>' +
+        (restantes.length
+          ? '<select id="nt-com-' + esc(p.id) + '">' +
+            restantes.map(function (c) {
+              return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+            }).join('') + '</select>'
+          : '<input id="nt-com-' + esc(p.id) + '" placeholder="Nom de la commune">') +
+      '</div>' +
+      '<div class="champ"><label>Tarif (HTG)</label>' +
+        '<input id="nt-frais-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
+        esc(enGourdes(p.frais)) + '"></div>' +
+    '</div>' +
+    '<button class="mini" data-tajout="' + esc(p.id) + '">Ajouter ce tarif</button>' +
+
+    '<div id="msg-pt-' + esc(p.id) + '"></div>' +
+    '<div class="rangee">' +
+      '<button class="mini" data-psave="' + esc(p.id) + '">Enregistrer le point</button>' +
+      '<button class="mini" data-pbascule="' + esc(p.id) + '" data-actif="' +
+        (p.actif ? '0' : '1') + '">' + (p.actif ? 'Désactiver' : 'Réactiver') + '</button>' +
+    '</div>' +
+    '<div class="danger"><button class="ghost" data-psup="' + esc(p.id) + '">' +
+      'Supprimer ce point</button></div>' +
+  '</div>';
+}
+
+async function rendreLivraison() {
+  el('panneau').innerHTML =
+    '<div class="sechead"><h2>Livraison</h2><span class="eyebrow num">' +
+      (points.length || '') + '</span></div>' +
+    '<p class="note">Le tarif facturé à l\u2019acheteur dépend de la commune du vendeur ' +
+      'et du point de retrait choisi. Une commande à plusieurs boutiques paie un ' +
+      'trajet par boutique : chacune part d\u2019un endroit différent.</p>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouveau point de retrait</h2></div>' +
+        '<div class="champ"><label for="ptNom">Nom</label>' +
+          '<input id="ptNom" placeholder="Flashipping Limbé"></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="ptCommune">Commune</label>' +
+            '<input id="ptCommune" placeholder="Limbé"></div>' +
+          '<div class="champ"><label for="ptFrais">Tarif de base (HTG)</label>' +
+            '<input id="ptFrais" inputmode="decimal" placeholder="250"></div>' +
+        '</div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="ptRepere">Point de repère</label>' +
+            '<input id="ptRepere" placeholder="Place publique"></div>' +
+          '<div class="champ"><label for="ptTel">Téléphone</label>' +
+            '<input id="ptTel" type="tel"></div>' +
+        '</div>' +
+        '<div id="newPtErr"></div>' +
+        '<button class="cta" id="creerPoint">Ajouter le point</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      (points.length ? points.map(cartePoint).join('')
+        : '<p class="empty">Aucun point de retrait.</p>') +
+    '</div>';
+}
+
 /* ---------- Navigation ----------------------------------- */
 
 async function rendre() {
@@ -504,17 +667,22 @@ async function rendre() {
   if (ongletActif === 'catalogue') await rendreCatalogue();
   if (ongletActif === 'boutiques') await rendreBoutiques();
   if (ongletActif === 'categories') await rendreCategories();
+  if (ongletActif === 'livraison') await rendreLivraison();
 }
 
 async function rechargerBase() {
   const r = await Promise.all([
     ADMIN.toutesBoutiques().catch(function () { return []; }),
     ADMIN.plans().catch(function () { return []; }),
-    ADMIN.toutesCategories().catch(function () { return []; })
+    ADMIN.toutesCategories().catch(function () { return []; }),
+    ADMIN.tousPoints().catch(function () { return []; }),
+    ADMIN.communesVendeurs().catch(function () { return []; })
   ]);
   boutiques = r[0];
   lesPlans = r[1];
   categories = r[2];
+  points = r[3];
+  communes = r[4];
 }
 
 function montrer(vue) {
@@ -544,6 +712,7 @@ document.addEventListener('click', async function (ev) {
   if (c.classList.contains('ong')) {
     ongletActif = c.getAttribute('data-ong');
     produitEnEdition = null;
+    boutiqueEnEdition = null;
     await rendre();
     return;
   }
@@ -694,6 +863,121 @@ document.addEventListener('click', async function (ev) {
     return;
   }
 
+
+  /* --- Comptoir : avancer dans la chaîne --- */
+  if (c.hasAttribute('data-avancer')) {
+    const id = c.getAttribute('data-avancer');
+    await agir(c, 'msg-' + id, function () {
+      return ADMIN.avancerCommande(id, c.getAttribute('data-vers'));
+    }, rendreComptoir);
+    return;
+  }
+
+  /* --- Boutiques : correction --- */
+  if (c.hasAttribute('data-bediter')) {
+    boutiqueEnEdition = c.getAttribute('data-bediter');
+    await rendreBoutiques();
+    return;
+  }
+  if (c.hasAttribute('data-bannuler')) {
+    boutiqueEnEdition = null;
+    await rendreBoutiques();
+    return;
+  }
+  if (c.hasAttribute('data-bsave')) {
+    const id = c.getAttribute('data-bsave');
+    const nom = val('b-nom-' + id);
+    const com = val('b-com-' + id);
+    if (!nom || !com) { msg('msg-' + id, 'Le nom et la commune sont nécessaires.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () {
+      return ADMIN.majBoutique(id, {
+        nom: nom, commune: com,
+        adresse_repere: val('b-rep-' + id) || null,
+        description: val('b-desc-' + id) || null
+      });
+    }, async function () {
+      boutiqueEnEdition = null;
+      await rechargerBase();
+      await rendreBoutiques();
+    });
+    return;
+  }
+
+  /* --- Livraison : points de retrait --- */
+  if (c.id === 'creerPoint') {
+    const nom = val('ptNom'), com = val('ptCommune'), rep = val('ptRepere');
+    const frais = enCentimes(val('ptFrais'));
+    if (!nom || !com || !rep) {
+      msg('newPtErr', 'Nom, commune et point de repère sont nécessaires.', 'ko'); return;
+    }
+    if (frais < 0) { msg('newPtErr', 'Tarif invalide.', 'ko'); return; }
+    await agir(c, 'newPtErr', function () {
+      return ADMIN.creerPoint({ nom: nom, commune: com, repere: rep,
+        telephone: val('ptTel'), frais: frais || 25000 });
+    }, async function () {
+      ['ptNom','ptCommune','ptRepere','ptTel','ptFrais'].forEach(function (k) {
+        if (el(k)) el(k).value = '';
+      });
+      await rechargerBase();
+      await rendreLivraison();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-psave')) {
+    const id = c.getAttribute('data-psave');
+    const nom = val('p-nom-' + id), com = val('p-com-' + id), rep = val('p-rep-' + id);
+    if (!nom || !com || !rep) {
+      msg('msg-pt-' + id, 'Nom, commune et repère sont nécessaires.', 'ko'); return;
+    }
+    await agir(c, 'msg-pt-' + id, function () {
+      return ADMIN.majPoint(id, { nom: nom, commune: com, repere: rep,
+        telephone: val('p-tel-' + id) || null,
+        frais: Math.max(0, enCentimes(val('p-frais-' + id))) });
+    }, async function () {
+      msg('msg-pt-' + id, 'Enregistré.', 'ok');
+      await rechargerBase();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-pbascule')) {
+    const id = c.getAttribute('data-pbascule');
+    const actif = c.getAttribute('data-actif') === '1';
+    await agir(c, 'msg-pt-' + id, function () { return ADMIN.majPoint(id, { actif: actif }); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+  if (c.hasAttribute('data-psup')) {
+    const id = c.getAttribute('data-psup');
+    if (c.dataset.sur !== '1') {
+      c.dataset.sur = '1';
+      c.textContent = 'Confirmer la suppression';
+      msg('msg-pt-' + id, 'Le point et ses tarifs seront supprimés. Appuie encore.', 'ko');
+      return;
+    }
+    await agir(c, 'msg-pt-' + id, function () { return ADMIN.supprimerPoint(id); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+
+  /* --- Livraison : tarifs par commune --- */
+  if (c.hasAttribute('data-tajout')) {
+    const pid = c.getAttribute('data-tajout');
+    const com = val('nt-com-' + pid);
+    const frais = enCentimes(val('nt-frais-' + pid));
+    if (!com) { msg('msg-pt-' + pid, 'Indique la commune d\u2019origine.', 'ko'); return; }
+    if (frais < 0) { msg('msg-pt-' + pid, 'Tarif invalide.', 'ko'); return; }
+    await agir(c, 'msg-pt-' + pid, function () {
+      return ADMIN.creerTarif(pid, com, frais);
+    }, async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+  if (c.hasAttribute('data-tsup')) {
+    const tid = c.getAttribute('data-tsup');
+    await agir(c, null, function () { return ADMIN.supprimerTarif(tid); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+
   /* --- Boutiques --- */
   if (c.id === 'creerBoutique') {
     const nom = val('bNom');
@@ -797,6 +1081,22 @@ document.addEventListener('change', async function (ev) {
     const cts = enCentimes(c.value);
     await agir(null, null, function () {
       return ADMIN.majVariante(c.getAttribute('data-vprix'), { prix: cts > 0 ? cts : null });
+    });
+    return;
+  }
+
+  if (c.hasAttribute('data-tcom')) {
+    const v = c.value.trim();
+    if (!v) return;
+    await agir(null, null, function () {
+      return ADMIN.majTarif(c.getAttribute('data-tcom'), { commune_origine: v });
+    });
+    return;
+  }
+  if (c.hasAttribute('data-tfrais')) {
+    const cts = Math.max(0, enCentimes(c.value));
+    await agir(null, null, function () {
+      return ADMIN.majTarif(c.getAttribute('data-tfrais'), { frais: cts });
     });
     return;
   }
