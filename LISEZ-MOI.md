@@ -65,23 +65,41 @@ téléphone publie des fiches illisibles.
 
 ---
 
-## L'écran de gestion
+## Quatre écrans, quatre métiers
 
-Adresse : `gestion.html` à côté de l'app publique. Pensé pour un agent debout,
-un téléphone dans une main. Trois onglets, dans l'ordre où l'on travaille.
+Une seule adresse à retenir et à partager : **`gestion.html`**. Chacun se
+connecte là et arrive sur l'écran de son rôle. Un administrateur voit les trois
+et peut ouvrir n'importe lequel — utile pour aider quelqu'un au téléphone en
+voyant exactement ce qu'il voit.
 
-**Comptoir** — les commandes qui attendent un geste, les plus anciennes
-d'abord. Pour chacune, le numéro du client bien visible, et une seule action
-possible selon l'étape : confirmer l'appel téléphonique, marquer le colis
-arrivé, encaisser et remettre contre le code, ou annuler. Un client qui a déjà
-des abandons à son compteur est signalé en rouge.
+| Écran | Pour qui | Ce qu'on y fait |
+|---|---|---|
+| `index.html` | Acheteurs | Catalogue, panier, commandes, suivi |
+| `vendeur.html` | Vendeurs | Préparer ses commandes, son stock, son argent |
+| `agent.html` | Agents | Appels, embarquement, remise au client |
+| `admin.html` | Administration | Tout le reste |
 
-**Catalogue** — choisir la boutique, créer un produit, ajouter ses variantes et
-leur stock, prendre les photos directement avec l'appareil du téléphone, puis
-publier. Un produit naît toujours en brouillon.
+**Espace vendeur** — ses commandes à préparer, et deux étapes qu'il est le seul
+à pouvoir déclarer : « je prépare » et « c'est prêt ». Il ajuste ses stocks et
+corrige ses descriptions. Il ne publie pas lui-même et ne fixe pas les prix :
+la qualité des photos décide des ventes. Il voit ce que Boutique Lakay lui doit,
+commande par commande.
 
-**Boutiques** — créer un vendeur, le vérifier après contrôle de sa patente et
-de sa pièce d'identité, fixer son plan d'abonnement.
+**Comptoir** — les commandes qui attendent un geste, rangées par urgence : le
+client devant le comptoir d'abord, le colis qui attend son camion ensuite. Pour
+chacune, le numéro du client bien visible et une seule action possible. Un
+client qui a déjà des abandons est signalé en rouge. Une recherche par référence
+pour les appels.
+
+**Administration** — tableau de bord, boutiques, catalogue complet, catégories,
+points de retrait et tarifs, règlements des vendeurs, comptes et rôles.
+
+### Rattacher une boutique à son vendeur
+
+Les boutiques créées par un agent lui appartiennent au départ. Tant qu'elles ne
+sont pas transférées, **le vendeur ouvre son espace et ne voit rien**. Dans
+Administration → Comptes : donne le rôle `vendeur` au compte, puis choisis sa
+boutique dans la liste qui apparaît.
 
 ### Deux refus volontaires
 

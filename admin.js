@@ -1,565 +1,1133 @@
 /* ============================================================
-   Boutique Lakay — fonctions réservées à l'équipe
+   Boutique Lakay — administration
 
-   Fichier séparé exprès : il n'est chargé que par gestion.html.
-   Un acheteur ne télécharge pas ce code — la data mobile coûte
-   cher et il n'a rien à y faire.
+   L'accès complet : boutiques, catalogue, catégories, livraison,
+   règlements, comptes. C'est ici que se décident les choses qui
+   engagent de l'argent ou la confiance — un tarif, une commission,
+   un règlement de vendeur, un rôle.
 
-   Toutes les règles métier (délai de 72 h, remise en stock,
-   vérification du code, compteur d'abandons) vivent en base, dans
-   des fonctions. Ici on ne fait que les appeler : impossible de
-   contourner une règle depuis le navigateur.
+   Le comptoir a son propre écran (agent.html) et le vendeur le
+   sien (vendeur.html). Un administrateur peut les ouvrir aussi,
+   pour voir ce qu'ils voient quand il les aide au téléphone.
    ============================================================ */
 
-const ADMIN = (function () {
+let ongletActif = 'tableau';
+let boutiques = [];
+let lesPlans = [];
+let categories = [];          // toutes, actives et inactives
+let boutiqueOuverte = null;
+let produits = [];
+let produitEnEdition = null;
+let boutiqueEnEdition = null;
+let points = [];
+let communes = [];
+let aRegler = [];
+let lesSoldes = [];
+let comptes = [];
 
-  const sb = function () { return API.sb(); };
+/* ---------- Onglet Catalogue ----------------------------- */
 
-  /* ---------- Connexion de l'équipe ------------------------
-     L'app publique utilise la connexion anonyme. Un agent doit
-     donc d'abord quitter cette session anonyme, sinon il reste
-     identifié comme un acheteur sans droits.                 */
+function optionsCategories(choisie) {
+  return categories.filter(function (c) { return c.actif || c.code === choisie; })
+    .map(function (c) {
+      return '<option value="' + esc(c.code) + '"' +
+        (c.code === choisie ? ' selected' : '') + '>' + esc(c.nom_fr) +
+        (c.actif ? '' : ' (désactivée)') + '</option>';
+    }).join('');
+}
 
-  async function connexion(email, motdepasse) {
-    try { await sb().auth.signOut(); } catch (e) {}
-    const { data, error } = await sb().auth.signInWithPassword({
-      email: email, password: motdepasse
+function blocMedias(p) {
+  const med = (p.medias || []).slice()
+    .sort(function (a, b) { return (a.ordre || 0) - (b.ordre || 0); });
+  if (!med.length) {
+    return '<div class="note">Aucun média. Une fiche sans photo ne se vend pas.</div>';
+  }
+  return '<div class="vignettes">' + med.map(function (m) {
+    const url = API.photoUrl(m.chemin);
+    const vid = (m.type || 'image') === 'video';
+    return '<div class="media">' +
+      (vid
+        ? '<video class="vignette" src="' + esc(url) + '" muted playsinline preload="metadata"></video>' +
+          '<span class="vid">VIDÉO</span>'
+        : '<img class="vignette" src="' + esc(url) + '" alt="" loading="lazy">') +
+      '<button class="sup" data-supmedia="' + esc(m.id) + '" data-prod="' + esc(p.id) +
+        '" aria-label="Supprimer ce média" title="Supprimer">×</button>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function blocVariantes(p) {
+  const vs = (p.variantes || []).slice()
+    .sort(function (a, b) { return (a.libelle || '').localeCompare(b.libelle || ''); });
+
+  const lignes = vs.map(function (v) {
+    return '<div class="vrow">' +
+      '<div class="champ lib"><label>Variante</label>' +
+        '<input value="' + esc(v.libelle) + '" data-vlib="' + esc(v.id) + '"></div>' +
+      '<div class="champ"><label>Prix (HTG)</label>' +
+        '<input inputmode="decimal" value="' + esc(enGourdes(v.prix)) +
+        '" placeholder="' + esc(enGourdes(p.prix)) + '" data-vprix="' + esc(v.id) + '"></div>' +
+      '<div class="champ"><label>Stock</label>' +
+        '<input class="num" type="number" min="0" value="' + (v.stock || 0) +
+        '" data-vstock="' + esc(v.id) + '"></div>' +
+      '<button class="sup" data-supvar="' + esc(v.id) + '" data-prod="' + esc(p.id) +
+        '" aria-label="Supprimer la variante">×</button>' +
+    '</div>';
+  }).join('');
+
+  return lignes +
+    '<div class="vrow">' +
+      '<div class="champ lib"><label>Nouvelle variante</label>' +
+        '<input id="nv-lib-' + esc(p.id) + '" placeholder="100 ml, M, 42…"></div>' +
+      '<div class="champ"><label>Prix (HTG)</label>' +
+        '<input id="nv-prix-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
+        esc(enGourdes(p.prix)) + '"></div>' +
+      '<div class="champ"><label>Stock</label>' +
+        '<input id="nv-stock-' + esc(p.id) + '" class="num" type="number" min="0" value="1"></div>' +
+    '</div>' +
+    '<button class="mini" data-ajvar="' + esc(p.id) + '">Ajouter cette variante</button>' +
+    '<p class="note">Prix laissé vide = celui du produit. Un cremas 100 ml et ' +
+      'un 50 ml mettent chacun leur propre prix.</p>';
+}
+
+function formEdition(p) {
+  return '<div class="edit">' +
+    '<div class="champ"><label for="e-nom-' + esc(p.id) + '">Nom de l’article</label>' +
+      '<input id="e-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="e-cat-' + esc(p.id) + '">Catégorie</label>' +
+        '<select id="e-cat-' + esc(p.id) + '">' + optionsCategories(p.categorie) + '</select></div>' +
+      '<div class="champ"><label for="e-prix-' + esc(p.id) + '">Prix de base (HTG)</label>' +
+        '<input id="e-prix-' + esc(p.id) + '" inputmode="decimal" value="' +
+        esc(enGourdes(p.prix)) + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="e-desc-' + esc(p.id) + '">Description complète</label>' +
+      '<textarea id="e-desc-' + esc(p.id) + '" rows="7">' + esc(p.description || '') + '</textarea></div>' +
+    '<label class="coche"><input type="checkbox" id="e-pre-' + esc(p.id) + '"' +
+      (p.prepaiement_exige ? ' checked' : '') + '>Prépaiement exigé</label>' +
+    '<button class="cta" data-enregistrer="' + esc(p.id) + '">Enregistrer les corrections</button>' +
+    '<button class="ghost" data-annuler="' + esc(p.id) + '">Annuler</button>' +
+  '</div>';
+}
+
+function carteProduit(p) {
+  const stock = (p.variantes || []).reduce(function (n, v) { return n + (v.stock || 0); }, 0);
+  const pub = p.statut === 'publie';
+  const cat = categories.filter(function (c) { return c.code === p.categorie; })[0];
+  const enEdition = produitEnEdition === p.id;
+  const prix = API.fourchette({ prix: p.prix, variantes: p.variantes });
+
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
+      '<span class="pill ' + (pub ? 'ok' : (p.statut === 'suspendu' ? 'ko' : 'gris')) + '">' +
+      esc(pub ? 'En vitrine' : (p.statut === 'suspendu' ? 'Suspendu' : 'Brouillon')) + '</span>' +
+      (p.prepaiement_exige ? '<span class="pill warn">Prépaiement</span>' : '') +
+    '</div>' +
+
+    (enEdition ? formEdition(p) :
+      '<div class="ligne"><span>Catégorie</span><strong>' +
+        esc(cat ? cat.nom_fr : p.categorie) + '</strong></div>' +
+      '<div class="ligne"><span>Prix</span><strong class="num">' +
+        (prix.min === prix.max ? htg(prix.min) : htg(prix.min) + ' à ' + htg(prix.max)) +
+        '</strong></div>' +
+      '<div class="ligne"><span>Stock total</span><strong class="num">' + stock + '</strong></div>' +
+      (p.description
+        ? '<div class="note">' + esc(p.description) + '</div>'
+        : '<div class="note">Pas de description. L’acheteur ne peut pas toucher ' +
+          'l’article : le texte est tout ce qu’il a.</div>') +
+      '<button class="mini" data-editer="' + esc(p.id) + '">Modifier l’article</button>'
+    ) +
+
+    blocMedias(p) +
+    '<div class="champ"><label for="ph-' + esc(p.id) + '">Ajouter des photos ou une vidéo</label>' +
+      '<input id="ph-' + esc(p.id) + '" type="file" multiple ' +
+      'accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" ' +
+      'data-photo="' + esc(p.id) + '"></div>' +
+    '<div class="progres" id="prog-' + esc(p.id) + '"></div>' +
+
+    blocVariantes(p) +
+
+    '<div id="msg-' + esc(p.id) + '"></div>' +
+    '<div class="rangee">' +
+      (pub
+        ? '<button class="ghost" data-depublier="' + esc(p.id) + '">Retirer de la vitrine</button>'
+        : '<button class="cta" data-publier="' + esc(p.id) + '">Publier</button>') +
+    '</div>' +
+    '<div class="danger"><button class="ghost" data-supprod="' + esc(p.id) + '">' +
+      'Supprimer cet article</button></div>' +
+  '</div>';
+}
+
+async function rendreCatalogue() {
+  const p = el('panneau');
+  const verifiees = boutiques.filter(function (b) { return b.statut === 'verifiee'; });
+  const actives = categories.filter(function (c) { return c.actif; });
+
+  if (!verifiees.length) {
+    p.innerHTML = '<div class="sechead"><h2>Catalogue</h2></div>' +
+      '<p class="empty">Aucune boutique vérifiée. Crée et vérifie un vendeur ' +
+      'dans l’onglet Boutiques avant de saisir des produits.</p>';
+    return;
+  }
+  if (!actives.length) {
+    p.innerHTML = '<div class="sechead"><h2>Catalogue</h2></div>' +
+      '<p class="empty">Aucune catégorie active. Ajoute-en une dans l’onglet Catégories.</p>';
+    return;
+  }
+  if (!boutiqueOuverte || !verifiees.filter(function (b) { return b.id === boutiqueOuverte; }).length) {
+    boutiqueOuverte = verifiees[0].id;
+  }
+
+  p.innerHTML =
+    '<div class="sechead"><h2>Catalogue</h2></div>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="champ"><label for="selBoutique">Boutique</label><select id="selBoutique">' +
+          verifiees.map(function (b) {
+            return '<option value="' + esc(b.id) + '"' +
+              (b.id === boutiqueOuverte ? ' selected' : '') + '>' +
+              esc(b.nom) + ' — ' + esc(b.commune) + '</option>';
+          }).join('') + '</select></div>' +
+      '</div>' +
+
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouvel article</h2></div>' +
+        '<div class="champ"><label for="pNom">Nom de l’article</label>' +
+          '<input id="pNom" placeholder="Cremas maison"></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="pCat">Catégorie</label><select id="pCat">' +
+            optionsCategories(null) + '</select></div>' +
+          '<div class="champ"><label for="pPrix">Prix de base (HTG)</label>' +
+            '<input id="pPrix" inputmode="decimal" placeholder="750"></div>' +
+        '</div>' +
+        '<div class="champ"><label for="pDesc">Description complète</label>' +
+          '<textarea id="pDesc" rows="7" placeholder="Tout ce que l’acheteur ne peut pas voir : ' +
+            'contenance, ingrédients, matière, taille réelle, état, durée de conservation, ' +
+            'ce qui est inclus…"></textarea></div>' +
+        '<label class="coche"><input type="checkbox" id="pPrepaie">' +
+          'Prépaiement exigé (gros montant, le vendeur assume)</label>' +
+        '<div id="newProdErr"></div>' +
+        '<button class="cta" id="creerProduit">Créer en brouillon</button>' +
+        '<p class="note">L’article naît en brouillon. Tu ajoutes ensuite ses variantes, ' +
+          'ses photos, et tu publies quand c’est prêt. Tout reste modifiable.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sechead"><h2 style="font-size:14px">Articles de cette boutique</h2>' +
+      '<span class="eyebrow num" id="nbProd"></span></div>' +
+    '<div class="pile" id="listeProduits"><p class="empty">…</p></div>';
+
+  await rechargerProduits();
+}
+
+async function rechargerProduits() {
+  const zone = el('listeProduits');
+  if (!zone) return;
+  try {
+    produits = await OPS.produitsBoutique(boutiqueOuverte);
+    if (el('nbProd')) el('nbProd').textContent = produits.length || '';
+    zone.innerHTML = produits.length
+      ? produits.map(carteProduit).join('')
+      : '<p class="empty">Aucun article. Crée le premier ci-dessus.</p>';
+  } catch (e) {
+    zone.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+  }
+}
+
+/* ---------- Onglet Boutiques ----------------------------- */
+
+function planActif(b) {
+  const a = (b.abonnements || []).filter(function (x) { return !x.fin; })[0];
+  return a ? a.plan : null;
+}
+
+function formBoutique(b) {
+  return '<div class="edit">' +
+    '<div class="champ"><label for="b-nom-' + esc(b.id) + '">Nom de la boutique</label>' +
+      '<input id="b-nom-' + esc(b.id) + '" value="' + esc(b.nom) + '"></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="b-com-' + esc(b.id) + '">Commune</label>' +
+        '<input id="b-com-' + esc(b.id) + '" value="' + esc(b.commune) + '"></div>' +
+      '<div class="champ"><label for="b-rep-' + esc(b.id) + '">Point de repère</label>' +
+        '<input id="b-rep-' + esc(b.id) + '" value="' + esc(b.adresse_repere || '') + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="b-desc-' + esc(b.id) + '">Description</label>' +
+      '<textarea id="b-desc-' + esc(b.id) + '" rows="5">' + esc(b.description || '') + '</textarea></div>' +
+    '<p class="note">La commune n\u2019est pas qu\u2019une indication : c\u2019est elle qui ' +
+      'décide du tarif de livraison depuis cette boutique.</p>' +
+    '<button class="cta" data-bsave="' + esc(b.id) + '">Enregistrer</button>' +
+    '<button class="ghost" data-bannuler="' + esc(b.id) + '">Annuler</button>' +
+  '</div>';
+}
+
+function carteBoutique(b) {
+  const st = b.statut;
+  const plan = planActif(b);
+  const enEdition = boutiqueEnEdition === b.id;
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(b.nom) + '</h2>' +
+      '<span class="pill ' + (st === 'verifiee' ? 'ok' : (st === 'suspendue' ? 'ko' : 'warn')) + '">' +
+      esc(st === 'verifiee' ? 'Vérifiée' : (st === 'suspendue' ? 'Suspendue' : 'En attente')) +
+      '</span></div>' +
+    (enEdition ? formBoutique(b) :
+      '<div class="ligne"><span>Commune</span><strong>' + esc(b.commune) + '</strong></div>' +
+      (b.adresse_repere ? '<div class="ligne"><span>Repère</span><span>' +
+        esc(b.adresse_repere) + '</span></div>' : '') +
+      (b.description ? '<div class="note">' + esc(b.description) + '</div>' : '') +
+      '<button class="mini" data-bediter="' + esc(b.id) + '">Modifier la boutique</button>'
+    ) +
+    '<div class="champ"><label for="plan-' + esc(b.id) + '">Plan</label>' +
+      '<select id="plan-' + esc(b.id) + '" data-plan="' + esc(b.id) + '">' +
+        '<option value="">— aucun —</option>' +
+        lesPlans.map(function (p) {
+          return '<option value="' + esc(p.code) + '"' + (plan === p.code ? ' selected' : '') + '>' +
+            esc(p.nom) + ' — ' + (p.commission_bps / 100) + ' % de commission</option>';
+        }).join('') + '</select></div>' +
+    '<div id="msg-' + esc(b.id) + '"></div>' +
+    '<div class="rangee">' +
+      (st !== 'verifiee' ? '<button class="mini" data-verifier="' + esc(b.id) + '">' +
+        (st === 'suspendue' ? 'Réactiver' : 'Vérifier') + '</button>' : '') +
+      (st === 'verifiee' ? '<button class="mini" data-suspendre="' + esc(b.id) + '">Suspendre</button>' : '') +
+    '</div>' +
+    (st === 'en_attente'
+      ? '<p class="note">Vérifie la patente et la pièce d’identité avant de ' +
+        'passer en vitrine. C’est ce qui tient la confiance de la plateforme.</p>' : '') +
+  '</div>';
+}
+
+async function rendreBoutiques() {
+  el('panneau').innerHTML =
+    '<div class="sechead"><h2>Boutiques</h2><span class="eyebrow num">' +
+      (boutiques.length || '') + '</span></div>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouveau vendeur</h2></div>' +
+        '<div class="champ"><label for="bNom">Nom de la boutique</label>' +
+          '<input id="bNom" placeholder="Kay Mirèy"></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="bCommune">Commune</label>' +
+            '<input id="bCommune" placeholder="Cap-Haïtien"></div>' +
+          '<div class="champ"><label for="bRepere">Point de repère</label>' +
+            '<input id="bRepere" placeholder="Rue 10 J, près de…"></div>' +
+        '</div>' +
+        '<div class="champ"><label for="bDesc">Ce que vend ce vendeur</label>' +
+          '<textarea id="bDesc" rows="4"></textarea></div>' +
+        '<div id="newShopErr"></div>' +
+        '<button class="cta" id="creerBoutique">Créer en attente</button>' +
+        '<p class="note">La boutique est créée à ton nom et reste invisible ' +
+          'jusqu’à sa vérification.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      (boutiques.length ? boutiques.map(carteBoutique).join('')
+        : '<p class="empty">Aucune boutique. Crée la première ci-dessus.</p>') +
+    '</div>';
+}
+
+/* ---------- Onglet Catégories ---------------------------- */
+
+function carteCategorie(c) {
+  const n = produits.filter(function (p) { return p.categorie === c.code; }).length;
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(c.nom_fr) + '</h2>' +
+      '<span class="pill ' + (c.actif ? 'ok' : 'gris') + '">' +
+      esc(c.actif ? 'Active' : 'Désactivée') + '</span></div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="c-fr-' + esc(c.code) + '">Nom en français</label>' +
+        '<input id="c-fr-' + esc(c.code) + '" value="' + esc(c.nom_fr) + '"></div>' +
+      '<div class="champ"><label for="c-ht-' + esc(c.code) + '">Nom en créole</label>' +
+        '<input id="c-ht-' + esc(c.code) + '" value="' + esc(c.nom_ht) + '"></div>' +
+      '<div class="champ"><label for="c-ord-' + esc(c.code) + '">Ordre</label>' +
+        '<input id="c-ord-' + esc(c.code) + '" class="num" type="number" value="' +
+        (c.ordre || 0) + '"></div>' +
+    '</div>' +
+    '<div class="ligne"><span>Code interne</span><span class="num">' + esc(c.code) + '</span></div>' +
+    '<div id="msg-cat-' + esc(c.code) + '"></div>' +
+    '<div class="rangee">' +
+      '<button class="mini" data-majcat="' + esc(c.code) + '">Enregistrer</button>' +
+      '<button class="mini" data-basculecat="' + esc(c.code) + '" data-actif="' +
+        (c.actif ? '0' : '1') + '">' + (c.actif ? 'Désactiver' : 'Réactiver') + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function rendreCategories() {
+  el('panneau').innerHTML =
+    '<div class="sechead"><h2>Catégories</h2><span class="eyebrow num">' +
+      (categories.length || '') + '</span></div>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouvelle catégorie</h2></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="cNomFr">Nom en français</label>' +
+            '<input id="cNomFr" placeholder="Agroalimentaire"></div>' +
+          '<div class="champ"><label for="cNomHt">Nom en créole</label>' +
+            '<input id="cNomHt" placeholder="Manje"></div>' +
+        '</div>' +
+        '<div class="champ"><label for="cOrdre">Ordre d’affichage</label>' +
+          '<input id="cOrdre" class="num" type="number" value="9"></div>' +
+        '<div id="newCatErr"></div>' +
+        '<button class="cta" id="creerCategorie">Ajouter la catégorie</button>' +
+        '<p class="note">Elle apparaît aussitôt dans l’app des acheteurs, sans ' +
+          'rien toucher au code. Laisse le créole vide si tu ne l’as pas encore : ' +
+          'le nom français sera repris.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      (categories.length ? categories.map(carteCategorie).join('')
+        : '<p class="empty">Aucune catégorie.</p>') +
+    '</div>' +
+    '<p class="note">Une catégorie ne se supprime pas : des articles y sont ' +
+      'rattachés et leur historique de vente aussi. La désactiver la retire de ' +
+      'l’app sans rien casser.</p>';
+}
+
+
+/* ---------- Onglet Livraison -----------------------------
+   Points de retrait et tarifs. Le tarif dépend du couple
+   (commune du vendeur, point de retrait) : un achat au Cap
+   livré au Cap ne coûte pas ce que coûte un colis venu de
+   Ouanaminthe. Sans ça, soit tu surfactures le local, soit
+   tu perds de l'argent sur les longues distances.          */
+
+function cartePoint(p) {
+  const tarifs = (p.tarifs || []).slice()
+    .sort(function (a, b) { return a.commune_origine.localeCompare(b.commune_origine); });
+  const dejaFixees = tarifs.map(function (t) { return t.commune_origine.toLowerCase(); });
+  const restantes = communes.filter(function (c) {
+    return dejaFixees.indexOf(c.toLowerCase()) === -1;
+  });
+
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom) + '</h2>' +
+      '<span class="pill ' + (p.actif ? 'ok' : 'gris') + '">' +
+      esc(p.actif ? 'Actif' : 'Désactivé') + '</span></div>' +
+
+    '<div class="duo">' +
+      '<div class="champ"><label for="p-nom-' + esc(p.id) + '">Nom</label>' +
+        '<input id="p-nom-' + esc(p.id) + '" value="' + esc(p.nom) + '"></div>' +
+      '<div class="champ"><label for="p-com-' + esc(p.id) + '">Commune</label>' +
+        '<input id="p-com-' + esc(p.id) + '" value="' + esc(p.commune) + '"></div>' +
+    '</div>' +
+    '<div class="duo">' +
+      '<div class="champ"><label for="p-rep-' + esc(p.id) + '">Point de repère</label>' +
+        '<input id="p-rep-' + esc(p.id) + '" value="' + esc(p.repere) + '"></div>' +
+      '<div class="champ"><label for="p-tel-' + esc(p.id) + '">Téléphone</label>' +
+        '<input id="p-tel-' + esc(p.id) + '" type="tel" value="' + esc(p.telephone || '') + '"></div>' +
+    '</div>' +
+    '<div class="champ"><label for="p-frais-' + esc(p.id) + '">Tarif de base (HTG)</label>' +
+      '<input id="p-frais-' + esc(p.id) + '" inputmode="decimal" value="' +
+      esc(enGourdes(p.frais)) + '"></div>' +
+    '<p class="note">Appliqué à toute commune sans tarif particulier ci-dessous.</p>' +
+
+    '<div class="sechead"><h2 style="font-size:13px">Tarifs par commune d\u2019origine</h2></div>' +
+    (tarifs.length ? tarifs.map(function (t) {
+      return '<div class="vrow">' +
+        '<div class="champ lib"><label>Depuis</label>' +
+          '<input value="' + esc(t.commune_origine) + '" data-tcom="' + esc(t.id) + '"></div>' +
+        '<div class="champ"><label>Tarif (HTG)</label>' +
+          '<input inputmode="decimal" value="' + esc(enGourdes(t.frais)) +
+          '" data-tfrais="' + esc(t.id) + '"></div>' +
+        '<button class="sup" data-tsup="' + esc(t.id) + '" aria-label="Supprimer ce tarif">\u00d7</button>' +
+      '</div>';
+    }).join('') : '<p class="note">Aucun tarif particulier : tout part au tarif de base.</p>') +
+
+    '<div class="vrow">' +
+      '<div class="champ lib"><label>Nouvelle commune d\u2019origine</label>' +
+        (restantes.length
+          ? '<select id="nt-com-' + esc(p.id) + '">' +
+            restantes.map(function (c) {
+              return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+            }).join('') + '</select>'
+          : '<input id="nt-com-' + esc(p.id) + '" placeholder="Nom de la commune">') +
+      '</div>' +
+      '<div class="champ"><label>Tarif (HTG)</label>' +
+        '<input id="nt-frais-' + esc(p.id) + '" inputmode="decimal" placeholder="' +
+        esc(enGourdes(p.frais)) + '"></div>' +
+    '</div>' +
+    '<button class="mini" data-tajout="' + esc(p.id) + '">Ajouter ce tarif</button>' +
+
+    '<div id="msg-pt-' + esc(p.id) + '"></div>' +
+    '<div class="rangee">' +
+      '<button class="mini" data-psave="' + esc(p.id) + '">Enregistrer le point</button>' +
+      '<button class="mini" data-pbascule="' + esc(p.id) + '" data-actif="' +
+        (p.actif ? '0' : '1') + '">' + (p.actif ? 'Désactiver' : 'Réactiver') + '</button>' +
+    '</div>' +
+    '<div class="danger"><button class="ghost" data-psup="' + esc(p.id) + '">' +
+      'Supprimer ce point</button></div>' +
+  '</div>';
+}
+
+async function rendreLivraison() {
+  el('panneau').innerHTML =
+    '<div class="sechead"><h2>Livraison</h2><span class="eyebrow num">' +
+      (points.length || '') + '</span></div>' +
+    '<p class="note">Le tarif facturé à l\u2019acheteur dépend de la commune du vendeur ' +
+      'et du point de retrait choisi. Une commande à plusieurs boutiques paie un ' +
+      'trajet par boutique : chacune part d\u2019un endroit différent.</p>' +
+    '<div class="pile">' +
+      '<div class="bloc">' +
+        '<div class="titreligne"><h2>Nouveau point de retrait</h2></div>' +
+        '<div class="champ"><label for="ptNom">Nom</label>' +
+          '<input id="ptNom" placeholder="Flashipping Limbé"></div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="ptCommune">Commune</label>' +
+            '<input id="ptCommune" placeholder="Limbé"></div>' +
+          '<div class="champ"><label for="ptFrais">Tarif de base (HTG)</label>' +
+            '<input id="ptFrais" inputmode="decimal" placeholder="250"></div>' +
+        '</div>' +
+        '<div class="duo">' +
+          '<div class="champ"><label for="ptRepere">Point de repère</label>' +
+            '<input id="ptRepere" placeholder="Place publique"></div>' +
+          '<div class="champ"><label for="ptTel">Téléphone</label>' +
+            '<input id="ptTel" type="tel"></div>' +
+        '</div>' +
+        '<div id="newPtErr"></div>' +
+        '<button class="cta" id="creerPoint">Ajouter le point</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="pile">' +
+      (points.length ? points.map(cartePoint).join('')
+        : '<p class="empty">Aucun point de retrait.</p>') +
+    '</div>';
+}
+
+/* ---------- Événements : clics ---------------------------- */
+
+document.addEventListener('click', async function (ev) {
+  const c = ev.target.closest ? ev.target.closest('button') : null;
+  if (!c) return;
+
+  /* --- Catalogue : création --- */
+  if (c.id === 'creerProduit') {
+    const nom = val('pNom');
+    const prix = enCentimes(val('pPrix'));
+    if (!nom) { msg('newProdErr', 'Donne un nom à l’article.', 'ko'); return; }
+    if (prix <= 0) { msg('newProdErr', 'Indique un prix de base en gourdes.', 'ko'); return; }
+    await agir(c, 'newProdErr', function () {
+      return OPS.creerProduit({
+        boutique: boutiqueOuverte, categorie: el('pCat').value,
+        nom: nom, prix: prix, description: val('pDesc'),
+        prepaiement_exige: el('pPrepaie').checked
+      });
+    }, async function () {
+      el('pNom').value = ''; el('pPrix').value = ''; el('pDesc').value = '';
+      el('pPrepaie').checked = false;
+      await rechargerProduits();
     });
-    if (error) throw error;
-    return data.user;
+    return;
   }
 
-  async function deconnexion() {
-    await sb().auth.signOut();
-    try { localStorage.removeItem('bl:panier'); } catch (e) {}
+  /* --- Catalogue : modification --- */
+  if (c.hasAttribute('data-editer')) {
+    produitEnEdition = c.getAttribute('data-editer');
+    await rechargerProduits();
+    return;
+  }
+  if (c.hasAttribute('data-annuler')) {
+    produitEnEdition = null;
+    await rechargerProduits();
+    return;
+  }
+  if (c.hasAttribute('data-enregistrer')) {
+    const id = c.getAttribute('data-enregistrer');
+    const nom = val('e-nom-' + id);
+    const prix = enCentimes(val('e-prix-' + id));
+    if (!nom) { msg('msg-' + id, 'Le nom ne peut pas être vide.', 'ko'); return; }
+    if (prix <= 0) { msg('msg-' + id, 'Le prix de base doit être supérieur à zéro.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () {
+      return OPS.majProduit(id, {
+        nom: nom, prix: prix,
+        categorie: el('e-cat-' + id).value,
+        description: val('e-desc-' + id) || null,
+        prepaiement_exige: el('e-pre-' + id).checked
+      });
+    }, async function () { produitEnEdition = null; await rechargerProduits(); });
+    return;
   }
 
-  // Renvoie le rôle du compte connecté, ou null si personne.
-  async function monRole() {
-    const p = await API.profil();
-    return p ? p.role : null;
+  /* --- Catalogue : variantes --- */
+  if (c.hasAttribute('data-ajvar')) {
+    const id = c.getAttribute('data-ajvar');
+    const lib = val('nv-lib-' + id);
+    const prix = enCentimes(val('nv-prix-' + id));
+    const st = val('nv-stock-' + id);
+    await agir(c, 'msg-' + id, function () {
+      return OPS.ajouterVariante(id, lib, prix, st);
+    }, rechargerProduits);
+    return;
+  }
+  if (c.hasAttribute('data-supvar')) {
+    const vid = c.getAttribute('data-supvar');
+    const pid = c.getAttribute('data-prod');
+    await agir(c, 'msg-' + pid, function () { return OPS.supprimerVariante(vid); },
+      rechargerProduits);
+    return;
   }
 
-  async function estEquipe() {
-    const r = await monRole();
-    return r === 'agent' || r === 'admin';
+  /* --- Catalogue : médias --- */
+  if (c.hasAttribute('data-supmedia')) {
+    const mid = c.getAttribute('data-supmedia');
+    const pid = c.getAttribute('data-prod');
+    const prod = produits.filter(function (p) { return p.id === pid; })[0];
+    const m = prod && (prod.medias || []).filter(function (x) { return x.id === mid; })[0];
+    if (!m) return;
+    await agir(c, 'msg-' + pid, function () { return OPS.supprimerMedia(m); },
+      rechargerProduits);
+    return;
   }
 
-  /* ---------- Boutiques ----------------------------------- */
-
-  async function toutesBoutiques() {
-    const { data, error } = await sb().from('boutiques')
-      .select('*, abonnements(plan, debut, fin)')
-      .order('cree_le', { ascending: false });
-    if (error) throw error;
-    return data;
+  /* --- Catalogue : publication et suppression --- */
+  if (c.hasAttribute('data-publier')) {
+    const id = c.getAttribute('data-publier');
+    await agir(c, 'msg-' + id, function () { return OPS.publier(id); }, rechargerProduits);
+    return;
   }
-
-  function slugifier(nom) {
-    return (nom || '').toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  if (c.hasAttribute('data-depublier')) {
+    const id = c.getAttribute('data-depublier');
+    await agir(c, 'msg-' + id, function () { return OPS.depublier(id); }, rechargerProduits);
+    return;
   }
-
-  async function creerBoutique(champs) {
-    const moi = await API.monId();
-    const corps = {
-      // Le vendeur n'a pas encore de compte : la boutique est créée au
-      // nom de l'agent, puis transférée quand le vendeur s'inscrit.
-      proprietaire: champs.proprietaire || moi,
-      nom: champs.nom,
-      slug: champs.slug || slugifier(champs.nom) + '-' + Date.now().toString(36).slice(-4),
-      commune: champs.commune,
-      adresse_repere: champs.adresse_repere || null,
-      description: champs.description || null,
-      statut: 'en_attente'
-    };
-    const { data, error } = await sb().from('boutiques').insert(corps).select().single();
-    if (error) throw error;
-    return data;
-  }
-
-  async function majStatutBoutique(id, statut) {
-    const { error } = await sb().from('boutiques').update({ statut: statut }).eq('id', id);
-    if (error) throw error;
-  }
-
-  // Corriger une erreur de saisie : nom, commune, repère, description.
-  // La commune n'est pas cosmétique — c'est elle qui décide du tarif
-  // de livraison depuis cette boutique.
-  async function majBoutique(id, champs) {
-    const { error } = await sb().from('boutiques').update(champs).eq('id', id);
-    if (error) throw error;
-  }
-
-  /* ---------- Points de retrait et tarifs ------------------
-     Le tarif dépend du couple (commune du vendeur, point de
-     retrait) : un achat au Cap livré au Cap ne coûte pas ce
-     que coûte un colis venu de Ouanaminthe.                 */
-
-  async function tousPoints() {
-    const { data, error } = await sb().from('points_retrait')
-      .select('*, tarifs:tarifs_livraison(id, commune_origine, frais, note)')
-      .order('commune');
-    if (error) throw error;
-    return data;
-  }
-
-  async function creerPoint(champs) {
-    const { data, error } = await sb().from('points_retrait').insert({
-      nom: champs.nom, commune: champs.commune, repere: champs.repere,
-      telephone: champs.telephone || null,
-      frais: champs.frais, actif: true
-    }).select().single();
-    if (error) throw error;
-    return data;
-  }
-
-  async function majPoint(id, champs) {
-    const { error } = await sb().from('points_retrait').update(champs).eq('id', id);
-    if (error) throw error;
-  }
-
-  // Un point déjà utilisé par une commande est protégé par sa clé
-  // étrangère : on le désactive plutôt que de trouer l'historique.
-  async function supprimerPoint(id) {
-    const { error } = await sb().from('points_retrait').delete().eq('id', id);
-    if (error) {
-      if (String(error.code) === '23503') {
-        throw new Error('Ce point a déjà reçu des commandes : il ne peut pas être ' +
-          'supprimé sans trouer l’historique. Désactive-le à la place.');
-      }
-      throw error;
+  if (c.hasAttribute('data-supprod')) {
+    const id = c.getAttribute('data-supprod');
+    if (c.dataset.sur !== '1') {
+      c.dataset.sur = '1';
+      c.textContent = 'Confirmer la suppression';
+      msg('msg-' + id, 'L’article, ses variantes et ses médias seront supprimés. ' +
+        'Appuie encore pour confirmer.', 'ko');
+      return;
     }
+    await agir(c, 'msg-' + id, function () { return OPS.supprimerProduit(id); },
+      async function () { produitEnEdition = null; await rechargerProduits(); });
+    return;
   }
 
-  async function creerTarif(pointId, commune, frais, note) {
-    const { data, error } = await sb().from('tarifs_livraison').insert({
-      point_retrait: pointId, commune_origine: commune, frais: frais, note: note || null
-    }).select().single();
-    if (error) {
-      if (String(error.message).indexOf('duplicate') !== -1) {
-        throw new Error('Un tarif existe déjà pour cette commune vers ce point.');
-      }
-      throw error;
-    }
-    return data;
+
+  /* --- Boutiques : correction --- */
+  if (c.hasAttribute('data-bediter')) {
+    boutiqueEnEdition = c.getAttribute('data-bediter');
+    await rendreBoutiques();
+    return;
   }
-
-  async function majTarif(id, champs) {
-    const { error } = await sb().from('tarifs_livraison').update(champs).eq('id', id);
-    if (error) throw error;
+  if (c.hasAttribute('data-bannuler')) {
+    boutiqueEnEdition = null;
+    await rendreBoutiques();
+    return;
   }
-
-  async function supprimerTarif(id) {
-    const { error } = await sb().from('tarifs_livraison').delete().eq('id', id);
-    if (error) throw error;
-  }
-
-  // Les communes où se trouvent les vendeurs : ce sont celles pour
-  // lesquelles un tarif a un sens.
-  async function communesVendeurs() {
-    const { data, error } = await sb().from('boutiques').select('commune');
-    if (error) return [];
-    const vues = {};
-    (data || []).forEach(function (b) { if (b.commune) vues[b.commune.trim()] = 1; });
-    return Object.keys(vues).sort();
-  }
-
-  async function plans() {
-    const { data, error } = await sb().from('plans').select('*').order('commission_bps', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
-
-  // Un seul abonnement actif par boutique : on clôt le précédent.
-  async function definirPlan(boutiqueId, planCode) {
-    await sb().from('abonnements')
-      .update({ fin: new Date().toISOString().slice(0, 10) })
-      .eq('boutique', boutiqueId).is('fin', null);
-    const { error } = await sb().from('abonnements')
-      .insert({ boutique: boutiqueId, plan: planCode });
-    if (error) throw error;
-  }
-
-  /* ---------- Catégories ----------------------------------
-     Elles vivent en base pour qu'une nouvelle catégorie n'oblige
-     jamais à repasser par le code.                            */
-
-  async function toutesCategories() {
-    const { data, error } = await sb().from('categories')
-      .select('*').order('ordre').order('nom_fr');
-    if (error) throw error;
-    return data;
-  }
-
-  async function creerCategorie(champs) {
-    const code = champs.code || slugifier(champs.nom_fr).slice(0, 24);
-    if (!code) throw new Error('Donne un nom à la catégorie.');
-    const { data, error } = await sb().from('categories').insert({
-      code: code,
-      nom_fr: champs.nom_fr,
-      nom_ht: champs.nom_ht || champs.nom_fr,
-      ordre: parseInt(champs.ordre, 10) || 99,
-      actif: true
-    }).select().single();
-    if (error) {
-      if (String(error.message).indexOf('duplicate') !== -1) {
-        throw new Error('Une catégorie porte déjà ce nom.');
-      }
-      throw error;
-    }
-    return data;
-  }
-
-  async function majCategorie(code, champs) {
-    const { error } = await sb().from('categories').update(champs).eq('code', code);
-    if (error) throw error;
-  }
-
-  // On désactive au lieu de supprimer : des produits y sont rattachés.
-  async function basculerCategorie(code, actif) {
-    return majCategorie(code, { actif: !!actif });
-  }
-
-  /* ---------- Catalogue ----------------------------------- */
-
-  // Brouillons compris : c'est la vue de travail de l'équipe.
-  async function produitsBoutique(boutiqueId) {
-    const { data, error } = await sb().from('produits')
-      .select('*, variantes(id, libelle, stock, prix), medias(id, chemin, ordre, type, mime)')
-      .eq('boutique', boutiqueId)
-      .order('cree_le', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
-
-  async function creerProduit(champs) {
-    const corps = {
-      boutique: champs.boutique,
-      categorie: champs.categorie,
-      nom: champs.nom,
-      description: champs.description || null,
-      prix: champs.prix,                 // centimes
-      prepaiement_exige: !!champs.prepaiement_exige,
-      statut: 'brouillon'                // la publication est une étape à part
-    };
-    const { data, error } = await sb().from('produits').insert(corps).select().single();
-    if (error) throw error;
-    return data;
-  }
-
-  async function majProduit(id, champs) {
-    const { error } = await sb().from('produits').update(champs).eq('id', id);
-    if (error) throw error;
-  }
-
-  // Un produit déjà commandé ne se supprime pas : sa variante est protégée
-  // par une clé étrangère, pour que l'historique des ventes reste intact.
-  // On explique au lieu de laisser passer l'erreur brute de Postgres.
-  async function supprimerProduit(id) {
-    const { error } = await sb().from('produits').delete().eq('id', id);
-    if (error) {
-      if (String(error.message).indexOf('foreign key') !== -1 ||
-          String(error.code) === '23503') {
-        throw new Error('Cet article a déjà été commandé : il ne peut pas être ' +
-          'supprimé sans trouer l’historique des ventes. Retire-le de la vitrine.');
-      }
-      throw error;
-    }
-  }
-
-  /* ---------- Variantes ----------------------------------
-     Chaque variante porte son propre prix : un cremas 100 ml et
-     un 50 ml ne coûtent pas la même chose. Prix vide = celui du
-     produit.                                                  */
-
-  async function ajouterVariante(produitId, libelle, prix, stock) {
-    const { data, error } = await sb().from('variantes').insert({
-      produit: produitId,
-      libelle: (libelle || '').trim() || 'Standard',
-      prix: prix ? Math.max(1, prix) : null,
-      stock: Math.max(0, parseInt(stock, 10) || 0)
-    }).select().single();
-    if (error) {
-      if (String(error.message).indexOf('duplicate') !== -1) {
-        throw new Error('Ce produit a déjà une variante portant ce nom.');
-      }
-      throw error;
-    }
-    return data;
-  }
-
-  async function majVariante(varianteId, champs) {
-    const { error } = await sb().from('variantes').update(champs).eq('id', varianteId);
-    if (error) throw error;
-  }
-
-  async function supprimerVariante(varianteId) {
-    const { error } = await sb().from('variantes').delete().eq('id', varianteId);
-    if (error) {
-      if (String(error.code) === '23503') {
-        throw new Error('Cette variante a déjà été vendue : mets son stock à 0 ' +
-          'plutôt que de la supprimer.');
-      }
-      throw error;
-    }
-  }
-
-  /* ---------- Photos et vidéos ----------------------------
-     Le bucket est public en lecture (c'est une vitrine) et
-     fermé en écriture à tout le monde sauf l'équipe.
-     Les limites sont dans config.js, pas ici.                */
-
-  function typeDe(fichier) {
-    return (fichier.type || '').indexOf('video/') === 0 ? 'video' : 'image';
-  }
-
-  // Durée d'une vidéo, lue sans l'envoyer : inutile de dépenser la data
-  // d'un agent pour téléverser un fichier qu'on va refuser.
-  function dureeVideo(fichier) {
-    return new Promise(function (ok) {
-      try {
-        const v = document.createElement('video');
-        const url = URL.createObjectURL(fichier);
-        let fini = false;
-        const terminer = function (d) {
-          if (fini) return;
-          fini = true;
-          URL.revokeObjectURL(url);
-          ok(d);
-        };
-        v.preload = 'metadata';
-        v.onloadedmetadata = function () { terminer(v.duration || 0); };
-        v.onerror = function () { terminer(0); };
-        setTimeout(function () { terminer(0); }, 6000); // lecteur muet : on laisse passer
-        v.src = url;
-      } catch (e) { ok(0); }
+  if (c.hasAttribute('data-bsave')) {
+    const id = c.getAttribute('data-bsave');
+    const nom = val('b-nom-' + id);
+    const com = val('b-com-' + id);
+    if (!nom || !com) { msg('msg-' + id, 'Le nom et la commune sont nécessaires.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () {
+      return OPS.majBoutique(id, {
+        nom: nom, commune: com,
+        adresse_repere: val('b-rep-' + id) || null,
+        description: val('b-desc-' + id) || null
+      });
+    }, async function () {
+      boutiqueEnEdition = null;
+      await rechargerBase();
+      await rendreBoutiques();
     });
+    return;
   }
 
-  // Renvoie un message d'erreur, ou null si le fichier passe.
-  async function verifierMedia(fichier, dejaImages, dejaVideos) {
-    const lim = CONFIG.medias;
-    const est = typeDe(fichier);
-    const mo = fichier.size / (1024 * 1024);
-
-    if (mo > lim.moMax) {
-      return 'Fichier de ' + mo.toFixed(1) + ' Mo : la limite est ' + lim.moMax + ' Mo.';
+  /* --- Livraison : points de retrait --- */
+  if (c.id === 'creerPoint') {
+    const nom = val('ptNom'), com = val('ptCommune'), rep = val('ptRepere');
+    const frais = enCentimes(val('ptFrais'));
+    if (!nom || !com || !rep) {
+      msg('newPtErr', 'Nom, commune et point de repère sont nécessaires.', 'ko'); return;
     }
-    if (est === 'image' && dejaImages >= lim.photosMax) {
-      return 'Déjà ' + lim.photosMax + ' photos sur cet article.';
-    }
-    if (est === 'video') {
-      if (dejaVideos >= lim.videosMax) {
-        return 'Déjà ' + lim.videosMax + ' vidéo(s) sur cet article.';
-      }
-      const d = await dureeVideo(fichier);
-      if (d && d > lim.videoSecondesMax) {
-        return 'Vidéo de ' + Math.round(d) + ' s : la limite est ' +
-          lim.videoSecondesMax + ' s. Une vidéo longue coûte la data de l’acheteur.';
-      }
-    }
-    return null;
-  }
-
-  async function televerserMedia(produitId, fichier, prisParAgent) {
-    const est = typeDe(fichier);
-    const ext = (fichier.name.split('.').pop() || (est === 'video' ? 'mp4' : 'jpg'))
-      .toLowerCase().replace(/[^a-z0-9]/g, '');
-    const chemin = produitId + '/' + Date.now().toString(36) + '-' +
-      Math.random().toString(36).slice(2, 7) + '.' + ext;
-
-    const up = await sb().storage.from('produits')
-      .upload(chemin, fichier, { contentType: fichier.type || undefined, upsert: false });
-    if (up.error) throw up.error;
-
-    const { count } = await sb().from('medias')
-      .select('id', { count: 'exact', head: true }).eq('produit', produitId);
-
-    const { data, error } = await sb().from('medias').insert({
-      produit: produitId, chemin: chemin, type: est,
-      mime: fichier.type || null,
-      ordre: count || 0, pris_par_agent: !!prisParAgent
-    }).select().single();
-    if (error) throw error;
-    return data;
-  }
-
-  /* Plusieurs fichiers, un par un et pas en parallèle : sur un réseau
-     faible, quatre envois simultanés échouent plus souvent qu'ils ne
-     passent. `avance` est rappelée après chaque fichier pour que
-     l'agent voie où en est l'envoi. */
-  async function televerserPlusieurs(produitId, fichiers, dejaImages, dejaVideos, avance) {
-    const resultats = { envoyes: 0, erreurs: [] };
-    let nImg = dejaImages, nVid = dejaVideos;
-
-    for (let i = 0; i < fichiers.length; i++) {
-      const f = fichiers[i];
-      if (avance) avance(i + 1, fichiers.length, f.name);
-      const refus = await verifierMedia(f, nImg, nVid);
-      if (refus) { resultats.erreurs.push(f.name + ' : ' + refus); continue; }
-      try {
-        await televerserMedia(produitId, f, true);
-        resultats.envoyes++;
-        if (typeDe(f) === 'video') nVid++; else nImg++;
-      } catch (e) {
-        resultats.erreurs.push(f.name + ' : ' + (e.message || 'envoi impossible'));
-      }
-    }
-    return resultats;
-  }
-
-  async function supprimerMedia(media) {
-    await sb().storage.from('produits').remove([media.chemin]);
-    const { error } = await sb().from('medias').delete().eq('id', media.id);
-    if (error) throw error;
-  }
-
-  /* ---------- Publication --------------------------------
-     Un produit sans photo ni stock ne doit pas partir en
-     vitrine : une fiche vide ne se vend pas et abîme la
-     confiance dans toute la plateforme.                     */
-
-  async function publier(produitId) {
-    const { data: p, error: e1 } = await sb().from('produits')
-      .select('id, nom, prix, variantes(stock), medias(id, type)')
-      .eq('id', produitId).single();
-    if (e1) throw e1;
-
-    const stock = (p.variantes || []).reduce(function (n, v) { return n + (v.stock || 0); }, 0);
-    const photos = (p.medias || []).filter(function (m) { return (m.type || 'image') === 'image'; });
-
-    if (!stock) throw new Error('Ajoute au moins une variante avec du stock.');
-    // Une vidéo seule ne suffit pas : la grille du catalogue affiche des
-    // vignettes, et un article sans photo y apparaîtrait vide.
-    if (!photos.length) throw new Error('Ajoute au moins une photo. Une vidéo ' +
-      'seule ne suffit pas : la grille du catalogue affiche des vignettes.');
-
-    const { error } = await sb().from('produits')
-      .update({ statut: 'publie' }).eq('id', produitId);
-    if (error) throw error;
-  }
-
-  async function depublier(produitId) {
-    const { error } = await sb().from('produits')
-      .update({ statut: 'suspendu' }).eq('id', produitId);
-    if (error) throw error;
-  }
-
-  /* ---------- Comptoir ------------------------------------ */
-
-  const CHAMPS = 'id, reference, statut, total, cree_le, confirme_tel_le, arrive_le, numero_suivi, ' +
-    'expire_le, retire_le, point:points_retrait(nom, commune), ' +
-    'acheteur:profiles(nom, telephone, abandons), ' +
-    'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire, ' +
-    'boutique:boutiques(nom, commune))';
-
-  // Les commandes qui attendent un geste de l'équipe, les plus vieilles
-  // d'abord : c'est l'ordre dans lequel un comptoir travaille.
-  async function commandesOuvertes() {
-    const { data, error } = await sb().from('commandes')
-      .select(CHAMPS)
-      .in('statut', ['recue', 'confirmee', 'en_preparation', 'prete', 'en_transit',
-                     'payee', 'fonds_bloques', 'au_point_retrait', 'code_valide'])
-      .order('cree_le', { ascending: true });
-    if (error) throw error;
-    return data;
-  }
-
-  async function chercherCommande(reference) {
-    const { data, error } = await sb().from('commandes')
-      .select(CHAMPS).ilike('reference', (reference || '').trim()).maybeSingle();
-    if (error) throw error;
-    return data;
-  }
-
-  /* La chaîne de suivi. Les étapes sont déclarées ici une fois et
-     servent partout : boutons de l'agent, libellés, ordre.
-     Reculer est impossible, la base le refuse. */
-  const ETAPES = [
-    { code: 'recue',            nom: 'Commande reçue' },
-    { code: 'confirmee',        nom: 'Confirmée par téléphone' },
-    { code: 'en_preparation',   nom: 'Le vendeur prépare la commande' },
-    { code: 'prete',            nom: 'Le vendeur confirme : commande prête' },
-    { code: 'en_transit',       nom: 'Flashipping a récupéré le colis' },
-    { code: 'au_point_retrait', nom: 'Colis scanné disponible en succursale' },
-    { code: 'code_valide',      nom: 'Payée et retirée' },
-    { code: 'cloturee',         nom: 'Terminée — vendeur réglé' }
-  ];
-
-  function rangEtape(statut) {
-    for (let i = 0; i < ETAPES.length; i++) if (ETAPES[i].code === statut) return i;
-    if (statut === 'payee' || statut === 'fonds_bloques') return 4;
-    if (statut === 'fonds_liberes') return 6;
-    return -1; // litige, remboursée, abandonnée : hors chaîne
-  }
-
-  // LA seule étape suivante. Pas de raccourci : chaque étape correspond
-  // à une confirmation venue d'une personne différente — le vendeur dit
-  // que c'est prêt, le transporteur dit qu'il a embarqué et donne son
-  // numéro de suivi, la succursale dit que le colis est scanné. Sauter
-  // une étape, c'est affirmer un fait que personne n'a confirmé.
-  function etapeSuivante(statut) {
-    const r = rangEtape(statut);
-    if (r < 0 || r >= ETAPES.length - 1) return null;
-    const e = ETAPES[r + 1];
-    // "Payée et retirée" se franchit avec le code du client, ailleurs.
-    return e.code === 'code_valide' ? null : e;
-  }
-
-  async function avancerCommande(id, statut, numeroSuivi) {
-    const { data, error } = await sb().rpc('avancer_commande', {
-      p_commande: id, p_statut: statut, p_numero_suivi: numeroSuivi || null
+    if (frais < 0) { msg('newPtErr', 'Tarif invalide.', 'ko'); return; }
+    await agir(c, 'newPtErr', function () {
+      return OPS.creerPoint({ nom: nom, commune: com, repere: rep,
+        telephone: val('ptTel'), frais: frais || 25000 });
+    }, async function () {
+      ['ptNom','ptCommune','ptRepere','ptTel','ptFrais'].forEach(function (k) {
+        if (el(k)) el(k).value = '';
+      });
+      await rechargerBase();
+      await rendreLivraison();
     });
-    if (error) throw error;
-    return data;
+    return;
   }
-
-  async function confirmerTelephone(id) { return avancerCommande(id, 'confirmee'); }
-  async function marquerArrivee(id) { return avancerCommande(id, 'au_point_retrait'); }
-
-  async function validerRetrait(id, code, moyen) {
-    const { data, error } = await sb().rpc('valider_retrait', {
-      p_commande: id, p_code: (code || '').trim(), p_moyen: moyen || 'especes'
+  if (c.hasAttribute('data-psave')) {
+    const id = c.getAttribute('data-psave');
+    const nom = val('p-nom-' + id), com = val('p-com-' + id), rep = val('p-rep-' + id);
+    if (!nom || !com || !rep) {
+      msg('msg-pt-' + id, 'Nom, commune et repère sont nécessaires.', 'ko'); return;
+    }
+    await agir(c, 'msg-pt-' + id, function () {
+      return OPS.majPoint(id, { nom: nom, commune: com, repere: rep,
+        telephone: val('p-tel-' + id) || null,
+        frais: Math.max(0, enCentimes(val('p-frais-' + id))) });
+    }, async function () {
+      msg('msg-pt-' + id, 'Enregistré.', 'ok');
+      await rechargerBase();
     });
-    if (error) throw error;
-    return data;
+    return;
+  }
+  if (c.hasAttribute('data-pbascule')) {
+    const id = c.getAttribute('data-pbascule');
+    const actif = c.getAttribute('data-actif') === '1';
+    await agir(c, 'msg-pt-' + id, function () { return OPS.majPoint(id, { actif: actif }); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+  if (c.hasAttribute('data-psup')) {
+    const id = c.getAttribute('data-psup');
+    if (c.dataset.sur !== '1') {
+      c.dataset.sur = '1';
+      c.textContent = 'Confirmer la suppression';
+      msg('msg-pt-' + id, 'Le point et ses tarifs seront supprimés. Appuie encore.', 'ko');
+      return;
+    }
+    await agir(c, 'msg-pt-' + id, function () { return OPS.supprimerPoint(id); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
   }
 
-  async function marquerAbandon(id, motif) {
-    const { data, error } = await sb().rpc('marquer_abandon', {
-      p_commande: id, p_motif: motif || null
+  /* --- Livraison : tarifs par commune --- */
+  if (c.hasAttribute('data-tajout')) {
+    const pid = c.getAttribute('data-tajout');
+    const com = val('nt-com-' + pid);
+    const frais = enCentimes(val('nt-frais-' + pid));
+    if (!com) { msg('msg-pt-' + pid, 'Indique la commune d\u2019origine.', 'ko'); return; }
+    if (frais < 0) { msg('msg-pt-' + pid, 'Tarif invalide.', 'ko'); return; }
+    await agir(c, 'msg-pt-' + pid, function () {
+      return OPS.creerTarif(pid, com, frais);
+    }, async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+  if (c.hasAttribute('data-tsup')) {
+    const tid = c.getAttribute('data-tsup');
+    await agir(c, null, function () { return OPS.supprimerTarif(tid); },
+      async function () { await rechargerBase(); await rendreLivraison(); });
+    return;
+  }
+
+  /* --- Boutiques --- */
+  if (c.id === 'creerBoutique') {
+    const nom = val('bNom');
+    const commune = val('bCommune');
+    if (!nom || !commune) { msg('newShopErr', 'Le nom et la commune sont nécessaires.', 'ko'); return; }
+    await agir(c, 'newShopErr', function () {
+      return OPS.creerBoutique({
+        nom: nom, commune: commune,
+        adresse_repere: val('bRepere'), description: val('bDesc')
+      });
+    }, async function () { await rechargerBase(); await rendreBoutiques(); });
+    return;
+  }
+  if (c.hasAttribute('data-verifier')) {
+    const id = c.getAttribute('data-verifier');
+    await agir(c, 'msg-' + id, function () { return OPS.majStatutBoutique(id, 'verifiee'); },
+      async function () { await rechargerBase(); await rendreBoutiques(); });
+    return;
+  }
+  if (c.hasAttribute('data-suspendre')) {
+    const id = c.getAttribute('data-suspendre');
+    await agir(c, 'msg-' + id, function () { return OPS.majStatutBoutique(id, 'suspendue'); },
+      async function () { await rechargerBase(); await rendreBoutiques(); });
+    return;
+  }
+
+  /* --- Catégories --- */
+  if (c.id === 'creerCategorie') {
+    const fr = val('cNomFr');
+    if (!fr) { msg('newCatErr', 'Donne un nom à la catégorie.', 'ko'); return; }
+    await agir(c, 'newCatErr', function () {
+      return OPS.creerCategorie({ nom_fr: fr, nom_ht: val('cNomHt'), ordre: val('cOrdre') });
+    }, async function () {
+      el('cNomFr').value = ''; el('cNomHt').value = '';
+      await rechargerBase();
+      await rendreCategories();
     });
-    if (error) throw error;
-    return data;
+    return;
+  }
+  if (c.hasAttribute('data-majcat')) {
+    const code = c.getAttribute('data-majcat');
+    const fr = val('c-fr-' + code);
+    if (!fr) { msg('msg-cat-' + code, 'Le nom français ne peut pas être vide.', 'ko'); return; }
+    await agir(c, 'msg-cat-' + code, function () {
+      return OPS.majCategorie(code, {
+        nom_fr: fr,
+        nom_ht: val('c-ht-' + code) || fr,
+        ordre: parseInt(val('c-ord-' + code), 10) || 0
+      });
+    }, async function () {
+      msg('msg-cat-' + code, 'Enregistré.', 'ok');
+      await rechargerBase();
+    });
+    return;
+  }
+  if (c.hasAttribute('data-basculecat')) {
+    const code = c.getAttribute('data-basculecat');
+    const actif = c.getAttribute('data-actif') === '1';
+    await agir(c, 'msg-cat-' + code, function () { return OPS.basculerCategorie(code, actif); },
+      async function () { await rechargerBase(); await rendreCategories(); });
+    return;
+  }
+});
+
+/* ---------- Événements : champs --------------------------- */
+
+document.addEventListener('change', async function (ev) {
+  const c = ev.target;
+
+  if (c.id === 'selBoutique') {
+    boutiqueOuverte = c.value;
+    produitEnEdition = null;
+    await rechargerProduits();
+    return;
+  }
+  if (c.hasAttribute('data-plan')) {
+    const id = c.getAttribute('data-plan');
+    if (!c.value) return;
+    await agir(null, 'msg-' + id, function () { return OPS.definirPlan(id, c.value); },
+      async function () { msg('msg-' + id, 'Plan enregistré.', 'ok'); await rechargerBase(); });
+    return;
   }
 
-  return {
-    connexion: connexion, deconnexion: deconnexion,
-    monRole: monRole, estEquipe: estEquipe,
-    toutesBoutiques: toutesBoutiques, creerBoutique: creerBoutique,
-    majStatutBoutique: majStatutBoutique, majBoutique: majBoutique,
-    plans: plans, definirPlan: definirPlan, slugifier: slugifier,
-    tousPoints: tousPoints, creerPoint: creerPoint, majPoint: majPoint,
-    supprimerPoint: supprimerPoint, creerTarif: creerTarif, majTarif: majTarif,
-    supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
-    ETAPES: ETAPES, rangEtape: rangEtape, etapeSuivante: etapeSuivante,
-    avancerCommande: avancerCommande,
-    toutesCategories: toutesCategories, creerCategorie: creerCategorie,
-    majCategorie: majCategorie, basculerCategorie: basculerCategorie,
-    produitsBoutique: produitsBoutique, creerProduit: creerProduit,
-    majProduit: majProduit, supprimerProduit: supprimerProduit,
-    ajouterVariante: ajouterVariante, majVariante: majVariante,
-    supprimerVariante: supprimerVariante,
-    typeDe: typeDe, verifierMedia: verifierMedia,
-    televerserMedia: televerserMedia, televerserPlusieurs: televerserPlusieurs,
-    supprimerMedia: supprimerMedia,
-    publier: publier, depublier: depublier,
-    commandesOuvertes: commandesOuvertes, chercherCommande: chercherCommande,
-    confirmerTelephone: confirmerTelephone, marquerArrivee: marquerArrivee,
-    validerRetrait: validerRetrait, marquerAbandon: marquerAbandon
-  };
-})();
+  // Variantes : on enregistre au fil de la saisie, sans bouton.
+  if (c.hasAttribute('data-vstock')) {
+    await agir(null, null, function () {
+      return OPS.majVariante(c.getAttribute('data-vstock'),
+        { stock: Math.max(0, parseInt(c.value, 10) || 0) });
+    });
+    return;
+  }
+  if (c.hasAttribute('data-vlib')) {
+    const lib = c.value.trim();
+    if (!lib) return;
+    await agir(null, null, function () {
+      return OPS.majVariante(c.getAttribute('data-vlib'), { libelle: lib });
+    });
+    return;
+  }
+  if (c.hasAttribute('data-vprix')) {
+    const cts = enCentimes(c.value);
+    await agir(null, null, function () {
+      return OPS.majVariante(c.getAttribute('data-vprix'), { prix: cts > 0 ? cts : null });
+    });
+    return;
+  }
 
-window.ADMIN = ADMIN;
+  if (c.hasAttribute('data-tcom')) {
+    const v = c.value.trim();
+    if (!v) return;
+    await agir(null, null, function () {
+      return OPS.majTarif(c.getAttribute('data-tcom'), { commune_origine: v });
+    });
+    return;
+  }
+  if (c.hasAttribute('data-tfrais')) {
+    const cts = Math.max(0, enCentimes(c.value));
+    await agir(null, null, function () {
+      return OPS.majTarif(c.getAttribute('data-tfrais'), { frais: cts });
+    });
+    return;
+  }
+
+  /* --- Médias : plusieurs fichiers, un par un --- */
+  if (c.hasAttribute('data-photo')) {
+    const id = c.getAttribute('data-photo');
+    const fichiers = Array.prototype.slice.call(c.files || []);
+    if (!fichiers.length) return;
+
+    const prod = produits.filter(function (p) { return p.id === id; })[0] || { medias: [] };
+    const dejaImg = (prod.medias || []).filter(function (m) { return (m.type || 'image') === 'image'; }).length;
+    const dejaVid = (prod.medias || []).filter(function (m) { return m.type === 'video'; }).length;
+    const prog = el('prog-' + id);
+
+    msg('msg-' + id, '');
+    await agir(null, 'msg-' + id, function () {
+      return OPS.televerserPlusieurs(id, fichiers, dejaImg, dejaVid,
+        function (i, total, nom) {
+          if (prog) prog.textContent = 'Envoi ' + i + ' sur ' + total + ' — ' + nom;
+        });
+    }, async function (r) {
+      if (prog) prog.textContent = '';
+      c.value = '';
+      if (r.erreurs.length) {
+        msg('msg-' + id, (r.envoyes ? r.envoyes + ' envoyé(s). ' : '') +
+          r.erreurs.join(' · '), 'ko');
+      } else {
+        msg('msg-' + id, r.envoyes + ' média(s) ajouté(s).', 'ok');
+      }
+      await rechargerProduits();
+    });
+    return;
+  }
+});
+
+// Entrée dans les champs de connexion = se connecter.
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Enter' && (ev.target.id === 'mdp' || ev.target.id === 'email')) {
+    const b = el('entrer');
+    if (b) b.click();
+  }
+});
+
+
+/* ---------- Tableau de bord ------------------------------
+   Ce qu'un responsable veut voir en ouvrant l'app : ce qui bloque,
+   ce qu'il doit, ce qui tourne. Pas une collection de compteurs
+   flatteurs.                                                    */
+
+async function rendreTableau() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Tableau de bord</h2></div><p class="empty">\u2026</p>';
+
+  let ouvertes = [], du = [];
+  try {
+    ouvertes = await OPS.commandesOuvertes();
+    du = await OPS.duAuxVendeurs();
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+
+  const aAppeler = ouvertes.filter(function (o) { return o.statut === 'recue'; }).length;
+  const auComptoir = ouvertes.filter(function (o) { return o.statut === 'au_point_retrait'; });
+  const enRetard = auComptoir.filter(function (o) {
+    return o.expire_le && new Date(o.expire_le) < Date.now(); }).length;
+  const impayes = du.filter(function (l) { return !l.regle; });
+  const dette = impayes.reduce(function (s, l) { return s + Number(l.net); }, 0);
+  const enAttente = boutiques.filter(function (b) { return b.statut === 'en_attente'; }).length;
+
+  function tuile(titre, valeur, sous, alerte) {
+    return '<div class="bloc"' + (alerte ? ' style="border-color:var(--hot)"' : '') + '>' +
+      '<div class="slabel" style="font-size:11px;font-weight:700;letter-spacing:.07em;' +
+        'text-transform:uppercase;color:var(--ink-soft)">' + esc(titre) + '</div>' +
+      '<div style="font-family:var(--display);font-size:24px;letter-spacing:-.02em">' +
+        esc(valeur) + '</div>' +
+      (sous ? '<div class="note">' + esc(sous) + '</div>' : '') + '</div>';
+  }
+
+  z.innerHTML =
+    '<div class="sechead"><h2>Tableau de bord</h2></div>' +
+    '<div class="pile">' +
+      tuile('Dette envers les vendeurs', htg(dette),
+            impayes.length + ' commande(s) retirée(s) non réglée(s)', dette > 0) +
+      tuile('À appeler', String(aAppeler), 'Commandes en attente de confirmation') +
+      tuile('Au comptoir', String(auComptoir.length),
+            enRetard ? enRetard + ' au-delà du délai de retrait' : 'Dans les délais', enRetard > 0) +
+      tuile('Boutiques à vérifier', String(enAttente),
+            enAttente ? 'Patente et pièce d\u2019identité à contrôler' : 'Rien en attente') +
+    '</div>' +
+    '<p class="note">La dette envers les vendeurs est le chiffre à surveiller : ' +
+      'en phase pilote Flashipping encaisse au comptoir et doit reverser. ' +
+      'C\u2019est la somme la plus facile à oublier et la plus rapide à ' +
+      'détruire une relation.</p>';
+}
+
+/* ---------- Règlements ------------------------------------ */
+
+async function rendreReglements() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Règlements</h2></div><p class="empty">\u2026</p>';
+  try {
+    aRegler = await OPS.duAuxVendeurs();
+    lesSoldes = await OPS.soldes();
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+
+  // Groupé par boutique : on règle un vendeur, pas une commande.
+  const parBoutique = {};
+  aRegler.filter(function (l) { return !l.regle; }).forEach(function (l) {
+    if (!parBoutique[l.boutique]) parBoutique[l.boutique] = { nom: l.boutique_nom, lignes: [] };
+    parBoutique[l.boutique].lignes.push(l);
+  });
+  const cles = Object.keys(parBoutique);
+
+  z.innerHTML =
+    '<div class="sechead"><h2>Règlements</h2><span class="eyebrow num">' +
+      (cles.length || '') + '</span></div>' +
+    '<p class="note">L\u2019acheteur a payé au comptoir : cet argent appartient au ' +
+      'vendeur, commission déduite. Chaque règlement laisse deux lignes dans le ' +
+      'journal — ce qui part, ce que la plateforme garde — et rien ne s\u2019efface.</p>' +
+    (cles.length
+      ? '<div class="pile">' + cles.map(function (b) {
+          const g = parBoutique[b];
+          const total = g.lignes.reduce(function (s, l) { return s + Number(l.net); }, 0);
+          return '<div class="bloc">' +
+            '<div class="titreligne"><h2>' + esc(g.nom) + '</h2>' +
+              '<span class="pill ok">' + g.lignes.length + ' commande(s)</span></div>' +
+            g.lignes.map(function (l) {
+              return '<div class="ligne"><span class="num">' + esc(l.reference) + ' \u00b7 ' +
+                esc(quand(l.retire_le)) + '</span><span class="num">' + htg(l.net) + '</span></div>';
+            }).join('') +
+            '<div class="ligne" style="border-top:1px solid var(--line);padding-top:9px">' +
+              '<span><strong>À verser</strong></span>' +
+              '<strong class="num" style="font-size:18px">' + htg(total) + '</strong></div>' +
+            '<div id="msg-reg-' + esc(b) + '"></div>' +
+            '<button class="cta vert" data-regler="' + esc(b) + '">Marquer réglé \u00b7 ' +
+              htg(total) + '</button>' +
+          '</div>';
+        }).join('') + '</div>'
+      : '<p class="empty">Rien à régler. Toutes les ventes retirées sont soldées.</p>') +
+
+    '<div class="sechead"><h2 style="font-size:14px">Historique par boutique</h2></div>' +
+    '<div class="pile">' + (lesSoldes || []).map(function (s) {
+      return '<div class="bloc"><div class="titreligne"><h2>' + esc(s.nom) + '</h2></div>' +
+        '<div class="ligne"><span>Versé au vendeur</span><span class="num">' +
+          htg(s.libere) + '</span></div>' +
+        '<div class="ligne"><span>Commission gardée</span><span class="num">' +
+          htg(s.commission) + '</span></div>' +
+        '<div class="ligne"><span>Remboursé</span><span class="num">' +
+          htg(s.rembourse) + '</span></div></div>';
+    }).join('') + '</div>';
+}
+
+/* ---------- Comptes --------------------------------------
+   Qui est qui. Donner un rôle, et surtout rattacher une boutique
+   à son vendeur : sans ce rattachement, un vendeur ouvre son
+   espace et ne voit rien.                                      */
+
+async function rendreComptes() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Comptes</h2></div><p class="empty">\u2026</p>';
+  try {
+    comptes = await OPS.profilsParRole(null);
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+
+  const ROLES = [['acheteur', 'Acheteur'], ['vendeur', 'Vendeur'],
+                 ['agent', 'Agent'], ['admin', 'Administrateur']];
+
+  z.innerHTML =
+    '<div class="sechead"><h2>Comptes</h2><span class="eyebrow num">' +
+      (comptes.length || '') + '</span></div>' +
+    '<p class="note">Un vendeur ne voit ses commandes que si une boutique lui est ' +
+      'rattachée. Les boutiques créées par un agent lui appartiennent au départ : ' +
+      'il faut les transférer.</p>' +
+    '<div class="pile">' + comptes.map(function (p) {
+      const sienne = boutiques.filter(function (b) { return b.proprietaire === p.id; });
+      return '<div class="bloc">' +
+        '<div class="titreligne"><h2>' + esc(p.nom || 'Sans nom') + '</h2>' +
+          '<span class="pill ' + (p.role === 'admin' ? 'ko' :
+            (p.role === 'agent' ? 'att' : (p.role === 'vendeur' ? 'ok' : 'gris'))) + '">' +
+          esc(p.role) + '</span></div>' +
+        (p.telephone ? '<div class="ligne"><span>Téléphone</span><span class="num">' +
+          esc(p.telephone) + '</span></div>' : '') +
+        (sienne.length ? '<div class="ligne"><span>Boutique</span><strong>' +
+          sienne.map(function (b) { return esc(b.nom); }).join(', ') + '</strong></div>' : '') +
+        '<div class="champ"><label for="r-' + esc(p.id) + '">Rôle</label>' +
+          '<select id="r-' + esc(p.id) + '" data-role="' + esc(p.id) + '">' +
+            ROLES.map(function (r) {
+              return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') +
+                '>' + r[1] + '</option>';
+            }).join('') + '</select></div>' +
+        (p.role === 'vendeur'
+          ? '<div class="champ"><label for="tb-' + esc(p.id) + '">Rattacher une boutique</label>' +
+            '<select id="tb-' + esc(p.id) + '" data-transfert="' + esc(p.id) + '">' +
+            '<option value="">\u2014 choisir \u2014</option>' +
+            boutiques.map(function (b) {
+              return '<option value="' + esc(b.id) + '"' +
+                (b.proprietaire === p.id ? ' selected' : '') + '>' + esc(b.nom) +
+                ' \u2014 ' + esc(b.commune) + '</option>';
+            }).join('') + '</select></div>'
+          : '') +
+        '<div id="msg-' + esc(p.id) + '"></div>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+/* ---------- Navigation ----------------------------------- */
+
+async function rendre() {
+  Array.prototype.forEach.call(document.querySelectorAll('.ong'), function (b) {
+    b.setAttribute('aria-selected', b.getAttribute('data-ong') === ongletActif);
+  });
+  if (ongletActif === 'tableau') await rendreTableau();
+  if (ongletActif === 'boutiques') await rendreBoutiques();
+  if (ongletActif === 'catalogue') await rendreCatalogue();
+  if (ongletActif === 'categories') await rendreCategories();
+  if (ongletActif === 'livraison') await rendreLivraison();
+  if (ongletActif === 'reglements') await rendreReglements();
+  if (ongletActif === 'comptes') await rendreComptes();
+}
+
+async function rechargerBase() {
+  const r = await Promise.all([
+    OPS.toutesBoutiques().catch(function () { return []; }),
+    OPS.plans().catch(function () { return []; }),
+    OPS.toutesCategories().catch(function () { return []; }),
+    OPS.tousPoints().catch(function () { return []; }),
+    OPS.communesVendeurs().catch(function () { return []; })
+  ]);
+  boutiques = r[0]; lesPlans = r[1]; categories = r[2]; points = r[3]; communes = r[4];
+}
+
+/* ---------- Événements propres à l'administration --------- */
+
+document.addEventListener('click', async function (ev) {
+  const c = ev.target.closest ? ev.target.closest('button') : null;
+  if (!c) return;
+
+  if (c.classList.contains('ong')) {
+    ongletActif = c.getAttribute('data-ong');
+    produitEnEdition = null;
+    boutiqueEnEdition = null;
+    await rendre();
+    return;
+  }
+
+  if (c.hasAttribute('data-regler')) {
+    const b = c.getAttribute('data-regler');
+    const ids = aRegler.filter(function (l) { return l.boutique === b && !l.regle; })
+      .map(function (l) { return l.commande; });
+    // Deux appuis : un règlement écrit dans un journal qui ne se réécrit pas.
+    if (c.dataset.sur !== '1') {
+      c.dataset.sur = '1';
+      c.textContent = 'Confirmer le règlement';
+      msg('msg-reg-' + b, 'À faire une fois l\u2019argent remis au vendeur. ' +
+        'L\u2019écriture est définitive. Appuie encore pour confirmer.', 'ko');
+      return;
+    }
+    await agir(c, 'msg-reg-' + b, function () { return OPS.reglerBoutique(b, ids); },
+      async function (r) {
+        msg('msg-reg-' + b, r.commandes + ' commande(s) réglée(s), ' +
+          htg(r.montant) + ' versés.', 'ok');
+        setTimeout(rendreReglements, 1500);
+      });
+    return;
+  }
+});
+
+document.addEventListener('change', async function (ev) {
+  const c = ev.target;
+
+  if (c.hasAttribute('data-role')) {
+    const id = c.getAttribute('data-role');
+    await agir(null, 'msg-' + id, function () { return OPS.definirRole(id, c.value); },
+      async function () {
+        msg('msg-' + id, 'Rôle enregistré.', 'ok');
+        await rendreComptes();
+      });
+    return;
+  }
+  if (c.hasAttribute('data-transfert')) {
+    const id = c.getAttribute('data-transfert');
+    if (!c.value) return;
+    await agir(null, 'msg-' + id, function () { return OPS.transfererBoutique(c.value, id); },
+      async function () {
+        msg('msg-' + id, 'Boutique rattachée.', 'ok');
+        await rechargerBase();
+      });
+    return;
+  }
+});
+
+/* ---------- Démarrage ------------------------------------- */
+
+EQUIPE.brancher(['admin'], async function () {
+  await rechargerBase();
+  await rendre();
+});

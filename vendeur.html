@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espace vendeur — Boutique Lakay</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <span class="mark">Boutique Lakay</span>
+    <span class="tag">VENDEUR</span>
+    <span class="spacer"></span>
+    <button class="lien" id="sortir" hidden>Déconnexion</button>
+  </div>
+</header>
+
+<main>
+  <section id="vue-login" class="wrap">
+    <div class="sechead"><h2>Espace vendeur</h2></div>
+    <p class="note">Vos commandes à préparer, votre catalogue et ce qui vous est dû.</p>
+    <div class="pile">
+      <div class="bloc">
+        <div class="champ"><label for="email">Adresse e-mail</label>
+          <input id="email" type="email" autocomplete="username" inputmode="email"></div>
+        <div class="champ"><label for="mdp">Mot de passe</label>
+          <input id="mdp" type="password" autocomplete="current-password"></div>
+        <div id="loginErr"></div>
+        <button class="cta" id="entrer">Entrer</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-refus" class="wrap" hidden>
+    <div class="sechead"><h2>Accès refusé</h2></div>
+    <div class="pile"><div class="bloc">
+      <p class="note" id="refusTxt"></p>
+      <button class="cta" id="refusAutre" hidden>Aller à mon espace</button>
+      <button class="ghost" id="refusSortir">Se déconnecter</button>
+    </div></div>
+  </section>
+
+  <section id="vue-app" class="wrap" hidden>
+    <div class="onglets" role="tablist">
+      <button class="ong" role="tab" data-ong="preparer" aria-selected="true">À préparer</button>
+      <button class="ong" role="tab" data-ong="catalogue" aria-selected="false">Mon catalogue</button>
+      <button class="ong" role="tab" data-ong="argent" aria-selected="false">Mon argent</button>
+    </div>
+    <div id="panneau"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="ops.js"></script>
+<script src="equipe.js"></script>
+<script src="vendeur.js"></script>
+</body>
+</html>
