@@ -46,6 +46,9 @@ const T = {
     loadErr:'Impossible de charger. Vérifiez votre connexion.',
     zone:'Zone de service',
     from:'à partir de', video:'Vidéo de l\u2019article',
+    tracking:'Numéro de suivi Flashipping', trackingLink:'Suivre chez Flashipping',
+    yourEmail:'Adresse e-mail (facultatif)',
+    emailWhy:'Pour être prévenu dès que votre colis est disponible au comptoir.',
     videoData:'La vidéo ne se télécharge que si vous appuyez sur lecture.'
   },
   ht: {
@@ -85,6 +88,9 @@ const T = {
     loadErr:'Nou pa ka chaje. Tcheke koneksyon w.',
     zone:'Zòn sèvis',
     from:'apati de', video:'Videyo atik la',
+    tracking:'Nimewo swivi Flashipping', trackingLink:'Swiv li lakay Flashipping',
+    yourEmail:'Adrès imèl (si w vle)',
+    emailWhy:'Pou nou avèti w lè kolis ou disponib nan kontwa a.',
     videoData:'Videyo a ap chaje sèlman si w peze bouton lekti a.'
   }
 };
@@ -419,8 +425,12 @@ async function rendrePanier() {
         '<input id="fNom" value="' + esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
       '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
         '<input id="fTel" type="tel" inputmode="tel" value="' + esc(prof ? prof.telephone : '') + '"></div>' +
+      '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
+        '<input id="fMail" type="email" inputmode="email" autocomplete="email" value="' +
+        esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
     '</div>' +
-    '<p class="note">' + esc(t('phoneWhy')) + '</p>';
+    '<p class="note">' + esc(t('phoneWhy')) + '</p>' +
+    '<p class="note" style="padding-top:0">' + esc(t('emailWhy')) + '</p>';
 
   h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('pickT')) + '</h2></div><div class="picker">' +
     cache.points.map(function (pt) {
@@ -569,6 +579,18 @@ async function rendreCommande() {
     (o.point ? '<div class="totals"><div class="trow"><span>' + esc(t('pickT')) + '</span>' +
       '<span style="text-align:right">' + esc(o.point.nom) + '<br>' +
       '<span class="cshop">' + esc(o.point.repere) + '</span></span></div></div>' : '') +
+    // Dès l'embarquement, le colis est dans le réseau du transporteur :
+    // c'est ce numéro qui le suit, et l'acheteur doit l'avoir sous la main.
+    (o.numero_suivi
+      ? '<div class="totals"><div class="trow"><span>' + esc(t('tracking')) + '</span>' +
+        '<strong class="num">' + esc(o.numero_suivi) + '</strong></div>' +
+        (CONFIG.flashipping && CONFIG.flashipping.suiviUrl
+          ? '<div class="trow"><span></span><a href="' +
+            esc(CONFIG.flashipping.suiviUrl.replace('{numero}', encodeURIComponent(o.numero_suivi))) +
+            '" target="_blank" rel="noopener">' + esc(t('trackingLink')) + '</a></div>'
+          : '') +
+        '</div>'
+      : '') +
     blocEtapes(o.statut) +
     (fini ? '' : '<div class="warnbox">' + esc(t('delay')) + '</div>') +
     '<div class="shoplist">' + (o.lignes || []).map(function (l) {
@@ -655,7 +677,11 @@ async function envoyerCommande() {
   btn.textContent = t('ordering');
 
   try {
-    await API.majProfil({ nom: nom, telephone: tel, langue: lang });
+    const mail = (el('fMail') && el('fMail').value || '').trim();
+    await API.majProfil({
+      nom: nom, telephone: tel, langue: lang,
+      email_contact: mail || null
+    });
     const res = await API.creerCommande(
       panier.map(function (l) { return { variante: l.variante, quantite: l.quantite }; }),
       pointChoisi

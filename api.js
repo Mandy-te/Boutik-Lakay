@@ -244,7 +244,8 @@ const API = (function () {
 
   const CHAMPS_COMMANDE =
     'id, reference, statut, sous_total, frais_retrait, total, taux_usd, ' +
-    'confirme_tel_le, cree_le, arrive_le, expire_le, retire_le, libere_le, ' +
+    'confirme_tel_le, cree_le, prete_le, embarque_le, arrive_le, expire_le, ' +
+    'retire_le, cloture_le, numero_suivi, ' +
     'point:points_retrait(nom, commune, repere, telephone), ' +
     'lignes:lignes_commande(nom_produit, libelle, prix_unitaire, quantite)';
 

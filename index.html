@@ -91,10 +91,11 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 @media (min-width:560px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;text-align:left;padding:0;min-width:0}
 .tile{aspect-ratio:1/1;max-width:100%;display:grid;place-items:center;position:relative;overflow:hidden}
-/* contain, pas cover : les photos viennent des vendeurs, dans tous les
-   cadrages. Rogner couperait le goulot d'une bouteille ou la tête d'un
-   article. Le fond teinté comble ce qui reste. */
-.tile img{width:100%;height:100%;object-fit:contain}
+/* Les photos viennent des vendeurs, dans tous les cadrages. Rogner
+   couperait le goulot d'une bouteille ou la tête d'un article.
+   width/height à 100% faisait déborder l'image hors de sa boîte, qui
+   la coupait : ce sont les max- qui la contiennent vraiment. */
+.tile img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
 .tile svg{width:46%;height:46%;opacity:.5}
 .t-rad{background:var(--tile-a-bg);color:var(--tile-a-fg)}
 .t-bote{background:var(--tile-b-bg);color:var(--tile-b-fg)}
@@ -121,10 +122,12 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .shopsub{font-size:12px;color:var(--ink-soft)}
 
 .pwrap{padding-block:14px 20px;display:flex;flex-direction:column;gap:14px}
-/* Format carré et photo entière : sur la fiche, l'acheteur doit voir
-   l'article en entier, c'est tout ce dont il dispose pour juger. */
-.phero{aspect-ratio:1/1;max-width:100%;border-radius:14px;display:grid;place-items:center;overflow:hidden;padding:10px}
-.phero img{width:100%;height:100%;object-fit:contain}
+/* Sur la fiche, pas de cadre impose : la photo garde son format et le
+   bloc s'adapte. Une bouteille prise en hauteur reste entiere, une
+   photo large aussi. Hauteur plafonnee pour que le titre et le prix
+   restent visibles sans faire defiler. */
+.phero{max-width:100%;border-radius:14px;display:grid;place-items:center;overflow:hidden;padding:10px;min-height:180px}
+.phero img{max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:8px;display:block}
 .phero svg{width:33%;height:33%;opacity:.5}
 .pname{font-size:21px;line-height:1.2}
 .prow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}

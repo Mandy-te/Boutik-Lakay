@@ -449,7 +449,7 @@ const ADMIN = (function () {
 
   /* ---------- Comptoir ------------------------------------ */
 
-  const CHAMPS = 'id, reference, statut, total, cree_le, confirme_tel_le, arrive_le, ' +
+  const CHAMPS = 'id, reference, statut, total, cree_le, confirme_tel_le, arrive_le, numero_suivi, ' +
     'expire_le, retire_le, point:points_retrait(nom, commune), ' +
     'acheteur:profiles(nom, telephone, abandons), ' +
     'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire, ' +
@@ -480,10 +480,10 @@ const ADMIN = (function () {
   const ETAPES = [
     { code: 'recue',            nom: 'Commande reçue' },
     { code: 'confirmee',        nom: 'Confirmée par téléphone' },
-    { code: 'en_preparation',   nom: 'En préparation chez le vendeur' },
-    { code: 'prete',            nom: 'Prête — en attente du livreur' },
-    { code: 'en_transit',       nom: 'Embarquée vers le point de retrait' },
-    { code: 'au_point_retrait', nom: 'Arrivée au point de retrait' },
+    { code: 'en_preparation',   nom: 'Le vendeur prépare la commande' },
+    { code: 'prete',            nom: 'Le vendeur confirme : commande prête' },
+    { code: 'en_transit',       nom: 'Flashipping a récupéré le colis' },
+    { code: 'au_point_retrait', nom: 'Colis scanné disponible en succursale' },
     { code: 'code_valide',      nom: 'Payée et retirée' },
     { code: 'cloturee',         nom: 'Terminée — vendeur réglé' }
   ];
@@ -495,22 +495,22 @@ const ADMIN = (function () {
     return -1; // litige, remboursée, abandonnée : hors chaîne
   }
 
-  // Les étapes que l'agent peut encore déclencher. "Payée et retirée"
-  // n'y figure pas : elle exige le code du client.
-  function etapesSuivantes(statut) {
+  // LA seule étape suivante. Pas de raccourci : chaque étape correspond
+  // à une confirmation venue d'une personne différente — le vendeur dit
+  // que c'est prêt, le transporteur dit qu'il a embarqué et donne son
+  // numéro de suivi, la succursale dit que le colis est scanné. Sauter
+  // une étape, c'est affirmer un fait que personne n'a confirmé.
+  function etapeSuivante(statut) {
     const r = rangEtape(statut);
-    if (r < 0) return [];
-    return ETAPES.filter(function (e, i) {
-      if (i <= r) return false;
-      if (e.code === 'code_valide') return false;
-      if (e.code === 'cloturee') return statut === 'code_valide';
-      return true;
-    });
+    if (r < 0 || r >= ETAPES.length - 1) return null;
+    const e = ETAPES[r + 1];
+    // "Payée et retirée" se franchit avec le code du client, ailleurs.
+    return e.code === 'code_valide' ? null : e;
   }
 
-  async function avancerCommande(id, statut) {
+  async function avancerCommande(id, statut, numeroSuivi) {
     const { data, error } = await sb().rpc('avancer_commande', {
-      p_commande: id, p_statut: statut
+      p_commande: id, p_statut: statut, p_numero_suivi: numeroSuivi || null
     });
     if (error) throw error;
     return data;
@@ -544,7 +544,7 @@ const ADMIN = (function () {
     tousPoints: tousPoints, creerPoint: creerPoint, majPoint: majPoint,
     supprimerPoint: supprimerPoint, creerTarif: creerTarif, majTarif: majTarif,
     supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
-    ETAPES: ETAPES, rangEtape: rangEtape, etapesSuivantes: etapesSuivantes,
+    ETAPES: ETAPES, rangEtape: rangEtape, etapeSuivante: etapeSuivante,
     avancerCommande: avancerCommande,
     toutesCategories: toutesCategories, creerCategorie: creerCategorie,
     majCategorie: majCategorie, basculerCategorie: basculerCategorie,

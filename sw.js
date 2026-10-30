@@ -14,7 +14,10 @@
    propre cache de secours, explicite, dans api.js.
    ============================================================ */
 
-const VERSION = 'bl-v1.0.0';
+// À incrémenter à chaque mise en ligne : c'est ce numéro qui purge
+// l'ancien cache. Sans ça, un correctif reste invisible sur les
+// téléphones qui ont déjà ouvert l'app une fois.
+const VERSION = 'bl-v1.2.0';
 
 const SQUELETTE = [
   './',
@@ -76,26 +79,30 @@ self.addEventListener('fetch', function (ev) {
     return;
   }
 
-  // Le reste (nos propres fichiers) : on sert le cache tout de suite
-  // et on rafraîchit en arrière-plan, pour que l'app s'ouvre même
-  // sans réseau et reste à jour dès qu'il revient.
+  // Nos propres fichiers : le RÉSEAU D'ABORD, le cache en secours.
+  //
+  // L'inverse (cache d'abord, rafraîchi en arrière-plan) économise de la
+  // data, mais il rend chaque correctif invisible pendant un chargement :
+  // on corrige un bug, l'utilisateur recharge, et il revoit le bug. En
+  // phase de mise au point c'est insupportable, et le squelette ne pèse
+  // que quelques dizaines de kilooctets. Hors ligne, le cache prend le
+  // relais exactement comme avant.
   if (url.origin === self.location.origin) {
     ev.respondWith(
-      caches.match(req).then(function (hit) {
-        const reseau = fetch(req).then(function (rep) {
-          if (rep && rep.status === 200) {
-            const copie = rep.clone();
-            caches.open(VERSION).then(function (c) { c.put(req, copie); });
-          }
-          return rep;
-        }).catch(function () {
+      fetch(req).then(function (rep) {
+        if (rep && rep.status === 200) {
+          const copie = rep.clone();
+          caches.open(VERSION).then(function (c) { c.put(req, copie); });
+        }
+        return rep;
+      }).catch(function () {
+        return caches.match(req).then(function (hit) {
           if (hit) return hit;
           // Replier sur l'accueil seulement pour une navigation : sinon un
           // agent hors ligne recevrait l'app publique à l'URL de gestion.
           if (req.mode === 'navigate') return caches.match('./index.html');
           return Response.error();
         });
-        return hit || reseau;
       })
     );
   }

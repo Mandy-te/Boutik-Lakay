@@ -20,6 +20,16 @@ const CONFIG = {
   // À remettre à jour de temps en temps.
   tauxUsd: 132.50,
 
+  /* --- Flashipping ----------------------------------------
+     Le colis entre dans le réseau du transporteur à l'embarquement.
+     Si Flashipping expose une page de suivi publique, mets son
+     adresse ici avec {numero} à la place du numéro : l'acheteur
+     aura un lien direct. Laisse vide tant qu'elle n'existe pas —
+     un lien mort vaut moins que pas de lien.                    */
+  flashipping: {
+    suiviUrl: ''   // ex. 'https://flashipping.com/suivi?code={numero}'
+  },
+
   /* --- Zone de service ------------------------------------ */
   // Pilote : Grand Nord uniquement. On ouvre corridor par corridor.
   zone: 'Grand Nord',

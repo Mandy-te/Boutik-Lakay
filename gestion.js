@@ -90,23 +90,26 @@ function etatCommande(o) {
   return { c: 'att', mot: e ? e.nom : o.statut };
 }
 
-// Les étapes que l'agent peut encore déclencher : la suivante en bouton
-// principal, les autres en raccourcis. Sauter en avant est permis — un
-// agent au comptoir ne cliquera pas cinq fois, et l'y obliger produirait
-// des horodatages faux plutôt qu'un suivi rigoureux.
+// UNE seule étape possible, la suivante. Aucun raccourci : chaque étape
+// est une confirmation venue de quelqu'un — le vendeur, le transporteur,
+// la succursale. La déclarer sans l'avoir reçue rend le suivi faux.
 function blocAvancer(o) {
-  const suites = ADMIN.etapesSuivantes(o.statut);
-  if (!suites.length) return '';
-  const suivante = suites[0];
-  const autres = suites.slice(1);
-  return '<button class="cta" data-avancer="' + esc(o.id) + '" data-vers="' +
-      esc(suivante.code) + '">' + esc(suivante.nom) + '</button>' +
-    (autres.length
-      ? '<div class="rangee">' + autres.map(function (e) {
-          return '<button class="mini" data-avancer="' + esc(o.id) +
-            '" data-vers="' + esc(e.code) + '">' + esc(e.nom) + '</button>';
-        }).join('') + '</div>'
-      : '');
+  const e = ADMIN.etapeSuivante(o.statut);
+  if (!e) return '';
+
+  // Le colis entre dans le réseau Flashipping : son numéro de suivi est
+  // ce que l'acheteur utilisera pour le suivre de son côté.
+  const champNumero = e.code === 'en_transit'
+    ? '<div class="champ"><label for="suivi-' + esc(o.id) + '">' +
+        'Numéro de suivi Flashipping</label>' +
+        '<input id="suivi-' + esc(o.id) + '" placeholder="FS-2026-00841" ' +
+        'autocapitalize="characters"></div>' +
+      '<p class="note">Obligatoire : sans lui, l\u2019acheteur n\u2019a rien à suivre.</p>'
+    : '';
+
+  return champNumero +
+    '<button class="cta" data-avancer="' + esc(o.id) + '" data-vers="' +
+    esc(e.code) + '">' + esc(e.nom) + '</button>';
 }
 
 function carteCommande(o) {
@@ -153,6 +156,8 @@ function carteCommande(o) {
     '<div class="ligne"><span>Retrait</span><strong>' +
       esc(o.point ? o.point.nom : '—') + '</strong></div>' +
     '<div class="ligne"><span>Commandée</span><span>' + esc(quand(o.cree_le)) + '</span></div>' +
+    (o.numero_suivi ? '<div class="ligne"><span>Suivi Flashipping</span>' +
+      '<strong class="num">' + esc(o.numero_suivi) + '</strong></div>' : '') +
     '<div class="note">' + articles + '</div>' +
     '<div class="ligne"><span>À encaisser</span><strong class="num">' + htg(o.total) + '</strong></div>' +
     '<div id="msg-' + esc(o.id) + '"></div>' +
@@ -867,8 +872,15 @@ document.addEventListener('click', async function (ev) {
   /* --- Comptoir : avancer dans la chaîne --- */
   if (c.hasAttribute('data-avancer')) {
     const id = c.getAttribute('data-avancer');
+    const vers = c.getAttribute('data-vers');
+    const champ = el('suivi-' + id);
+    const num = champ ? champ.value.trim() : '';
+    if (vers === 'en_transit' && !num) {
+      msg('msg-' + id, 'Saisis le numéro de suivi Flashipping avant d\u2019embarquer.', 'ko');
+      return;
+    }
     await agir(c, 'msg-' + id, function () {
-      return ADMIN.avancerCommande(id, c.getAttribute('data-vers'));
+      return ADMIN.avancerCommande(id, vers, num);
     }, rendreComptoir);
     return;
   }
