@@ -56,6 +56,10 @@ const T = {
     needTel:'Numéro invalide. Exemple : 3132 4336.',
     connected:'Connecté', guest:'Compte de passage',
     lostCode:'Code perdu ? En demander un nouveau',
+    tooMany:'Trop d\u2019essais. Réessayez dans ',
+    minutes:'min', seconds:'s',
+    attemptsLeft:' essai(s) avant blocage',
+    askAgent:'Si vous avez oublié votre code secret, passez à une succursale Flashipping avec votre pièce d\u2019identité : un agent peut vous rouvrir l\u2019accès.',
     newCodeDone:'Nouveau code. L\u2019ancien ne vaut plus rien.',
     emailWhy:'Pour être prévenu dès que votre colis est disponible au comptoir.',
     videoData:'La vidéo ne se télécharge que si vous appuyez sur lecture.'
@@ -107,6 +111,10 @@ const T = {
     needTel:'Nimewo pa bon. Egzanp : 3132 4336.',
     connected:'Konekte', guest:'Kont pasaj',
     lostCode:'Ou pèdi kòd la ? Mande yon lòt',
+    tooMany:'Twòp esè. Tanpri tann ',
+    minutes:'min', seconds:'s',
+    attemptsLeft:' esè anvan nou bloke w',
+    askAgent:'Si w bliye kòd sekrè w, pase nan yon sikisal Flashipping ak pyès idantite w : yon ajan ka relouvri aksè a.',
     newCodeDone:'Nouvo kòd. Ansyen an pa vo anyen ankò.',
     emailWhy:'Pou nou avèti w lè kolis ou disponib nan kontwa a.',
     videoData:'Videyo a ap chaje sèlman si w peze bouton lekti a.'
@@ -175,6 +183,70 @@ function enAvant(p) {
 }
 function sauverPanier() {
   try { localStorage.setItem('bl:panier', JSON.stringify(panier)); } catch (e) {}
+}
+
+/* ---------- Essais de connexion ---------------------------
+
+   Ce compteur vit dans l'appareil. Il ne protège donc PAS contre
+   quelqu'un qui attaquerait le serveur depuis ailleurs — ça, c'est
+   le rôle des limites d'authentification de Supabase, réglables
+   dans son tableau de bord.
+
+   Il protège contre la menace réelle ici : un téléphone perdu ou
+   volé, entre les mains de quelqu'un qui essaie des codes. Cette
+   personne utilise l'app sur CET appareil, donc ce compteur l'arrête.
+
+   Un blocage côté serveur par numéro serait pire : n'importe qui
+   connaissant ton numéro pourrait t'enfermer dehors en saisissant
+   exprès de faux codes.                                          */
+
+const PALIERS = [
+  { echecs: 3,  attente: 30 },      // secondes
+  { echecs: 5,  attente: 5 * 60 },
+  { echecs: 7,  attente: 30 * 60 },
+  { echecs: 10, attente: 60 * 60 }
+];
+
+function lireEssais(tel) {
+  try {
+    const t = JSON.parse(localStorage.getItem('bl:essais') || '{}');
+    return t[tel] || { n: 0, jusqu: 0 };
+  } catch (e) { return { n: 0, jusqu: 0 }; }
+}
+
+function ecrireEssais(tel, v) {
+  try {
+    const t = JSON.parse(localStorage.getItem('bl:essais') || '{}');
+    if (v) t[tel] = v; else delete t[tel];
+    localStorage.setItem('bl:essais', JSON.stringify(t));
+  } catch (e) {}
+}
+
+function blocageRestant(tel) {
+  const e = lireEssais(tel);
+  const reste = Math.ceil((e.jusqu - Date.now()) / 1000);
+  return reste > 0 ? reste : 0;
+}
+
+function noterEchec(tel) {
+  const e = lireEssais(tel);
+  e.n = (e.n || 0) + 1;
+  let attente = 0;
+  PALIERS.forEach(function (p) { if (e.n >= p.echecs) attente = p.attente; });
+  e.jusqu = attente ? Date.now() + attente * 1000 : 0;
+  ecrireEssais(tel, e);
+  return e;
+}
+
+function essaisAvantBlocage(tel) {
+  const e = lireEssais(tel);
+  const prochain = PALIERS.filter(function (p) { return p.echecs > (e.n || 0); })[0];
+  return prochain ? prochain.echecs - (e.n || 0) : 0;
+}
+
+function dureeLisible(secondes) {
+  if (secondes >= 60) return Math.ceil(secondes / 60) + ' ' + t('minutes');
+  return secondes + ' ' + t('seconds');
 }
 
 /* ---------- Chargement ------------------------------------ */
@@ -807,17 +879,32 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'versInscription') { modeConnexion = false; rendrePanier(); return; }
 
   if (cible.id === 'seConnecter') {
-    const tel = (el('lTel').value || '').trim();
+    const tel = API.normaliserTel((el('lTel').value || '').trim());
     const pin = (el('lPin').value || '').trim();
     const z = el('compteErr');
+
+    const reste = blocageRestant(tel);
+    if (reste) {
+      z.innerHTML = '<div class="erreur">' + esc(t('tooMany') + dureeLisible(reste)) +
+        '</div><p class="note">' + esc(t('askAgent')) + '</p>';
+      return;
+    }
+
     cible.disabled = true;
     API.connecter(tel, pin).then(function () {
+      ecrireEssais(tel, null);       // compteur remis à zéro
       modeConnexion = false;
       invite = false;
       cache.commandes = [];
       rendrePanier();
     }).catch(function (e) {
-      z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+      const apres = noterEchec(tel);
+      const bloque = blocageRestant(tel);
+      const avant = essaisAvantBlocage(tel);
+      z.innerHTML = '<div class="erreur">' + esc(e.message) +
+        (bloque ? ' ' + esc(t('tooMany') + dureeLisible(bloque))
+                : (avant ? ' \u00b7 ' + avant + esc(t('attemptsLeft')) : '')) + '</div>' +
+        (apres.n >= 3 ? '<p class="note">' + esc(t('askAgent')) + '</p>' : '');
     }).then(function () { cible.disabled = false; });
     return;
   }
