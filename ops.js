@@ -76,6 +76,7 @@ const OPS = (function () {
       proprietaire: champs.proprietaire || moi,
       nom: champs.nom,
       slug: champs.slug || slugifier(champs.nom) + '-' + Date.now().toString(36).slice(-4),
+      departement: champs.departement || null,
       commune: champs.commune,
       adresse_repere: champs.adresse_repere || null,
       description: champs.description || null,

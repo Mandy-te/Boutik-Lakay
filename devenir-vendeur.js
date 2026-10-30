@@ -19,6 +19,14 @@
 
 let boutiqueCreee = null;
 
+// Les deux listes sont liées : choisir un département remplit les communes.
+document.addEventListener('DOMContentLoaded', function () {
+  const d = el('vDep'), c = el('vCommune');
+  if (d) d.innerHTML = optionsDepartements(null);
+  if (c) c.innerHTML = optionsCommunes(null, null);
+  lierDepartementCommune('vDep', 'vCommune');
+});
+
 function montrer(vue) {
   ['form', 'pieces', 'fin'].forEach(function (v) {
     const e = el('vue-' + v);
@@ -35,20 +43,24 @@ async function creerTout() {
   const pin = val('vPin');
   const mail = val('vMail');
   const boutique = val('vBoutique');
+  const departement = val('vDep');
   const commune = val('vCommune');
 
   if (!nom) throw new Error('Indiquez votre nom.');
   if (!API.telValide(tel)) throw new Error('Numéro invalide. Exemple : 3132 4336');
   if (pin.length !== 6) throw new Error('Le code secret doit avoir 6 chiffres.');
   if (!boutique) throw new Error('Donnez un nom à votre boutique.');
-  if (!commune) throw new Error('Indiquez la commune où se trouvent vos articles.');
+  if (!departement) throw new Error('Choisissez votre département.');
+  if (!commune) throw new Error('Choisissez la commune où se trouvent vos articles.');
 
   // Le compte d'abord : la boutique lui appartiendra, et c'est ce
   // rattachement qui lui donnera accès à ses commandes.
   await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail });
+  await API.majProfil({ departement: departement, commune: commune });
 
   const b = await OPS.creerBoutique({
     nom: boutique,
+    departement: departement,
     commune: commune,
     adresse_repere: val('vRepere'),
     description: val('vQuoi')
@@ -116,8 +128,14 @@ document.addEventListener('change', async function (ev) {
 });
 
 /* ---------- Démarrage -------------------------------------
-   Si quelqu'un arrive déjà connecté avec une boutique, on ne lui
-   refait pas remplir le formulaire : on l'envoie chez lui.     */
+
+   Sur un téléphone, ouvrir le sélecteur de fichiers peut faire
+   recharger la page : le navigateur met l'onglet en arrière-plan et
+   le reconstruit au retour. L'inscription ne doit donc pas perdre
+   le fil — c'est exactement là qu'elle le perdait, et le vendeur se
+   retrouvait éjecté sans avoir pu déposer ses pièces.
+
+   On reprend donc à l'étape où il en était.                      */
 
 (async function () {
   if (!API.pret()) {
@@ -126,9 +144,19 @@ document.addEventListener('change', async function (ev) {
   }
   try {
     const { data } = await API.sb().auth.getSession();
-    if (data && data.session && !data.session.user.is_anonymous) {
-      const b = await API.maBoutique();
-      if (b) { location.replace('vendeur.html'); return; }
+    if (!data || !data.session || data.session.user.is_anonymous) return;
+
+    const b = await API.maBoutique();
+    if (!b) return;                     // compte sans boutique : formulaire
+
+    boutiqueCreee = b;
+    if (b.piece_identite_url && b.patente_url) {
+      location.replace('vendeur.html'); // tout est déposé, il n'a plus rien à faire ici
+      return;
     }
+    // Il manque au moins une pièce : on le remet exactement où il s'était arrêté.
+    if (b.piece_identite_url) msg('msgId', 'Déjà reçue.', 'ok');
+    if (b.patente_url) msg('msgPatente', 'Déjà reçue.', 'ok');
+    montrer('pieces');
   } catch (e) {}
 })();

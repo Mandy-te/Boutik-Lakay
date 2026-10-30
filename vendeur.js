@@ -77,6 +77,53 @@ async function rendrePreparer() {
         'dès qu’un agent aura confirmé l’appel au client.</p>');
 }
 
+/* ---------- Pièces justificatives ------------------------
+   Déposables à tout moment depuis ici, pas seulement pendant
+   l'inscription : sur un téléphone, le sélecteur de fichiers peut
+   faire recharger la page et interrompre le parcours. Il faut
+   toujours un endroit où reprendre.                            */
+
+function champPiece(id, libelle, chemin, zone) {
+  return '<div class="champ"><label for="' + id + '">' + esc(libelle) +
+    (chemin ? ' \u2014 reçue' : '') + '</label>' +
+    '<input id="' + id + '" type="file" ' +
+    'accept="image/jpeg,image/png,image/webp,application/pdf"></div>' +
+    '<div id="' + zone + '"></div>';
+}
+
+function blocPieces() {
+  if (!boutique) return '';
+  return champPiece('docId', 'Pièce d\u2019identité', boutique.piece_identite_url, 'msgId') +
+    champPiece('docPatente', 'Patente', boutique.patente_url, 'msgPatente') +
+    '<p class="note">Elles restent privées : seule l\u2019équipe de Boutique Lakay ' +
+    'peut les consulter.</p>';
+}
+
+async function deposerPiece(champ, genre, zoneMsg, colonne) {
+  const input = el(champ);
+  const f = input && input.files && input.files[0];
+  if (!f || !boutique) return;
+  if (f.size > 10 * 1024 * 1024) {
+    msg(zoneMsg, 'Fichier trop lourd : 10 Mo maximum.', 'ko');
+    input.value = '';
+    return;
+  }
+  const moi = await API.monId();
+  const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const chemin = moi + '/' + genre + '-' + Date.now().toString(36) + '.' + ext;
+
+  msg(zoneMsg, 'Envoi\u2026', 'ok');
+  const up = await API.sb().storage.from('documents')
+    .upload(chemin, f, { contentType: f.type || undefined, upsert: true });
+  if (up.error) { msg(zoneMsg, up.error.message, 'ko'); return; }
+
+  const champs = {};
+  champs[colonne] = chemin;
+  await OPS.majBoutique(boutique.id, champs);
+  boutique = await API.maBoutique();
+  msg(zoneMsg, 'Reçue. Un agent la vérifiera.', 'ok');
+}
+
 /* ---------- Mon catalogue --------------------------------- */
 
 function carteProduit(p) {
@@ -222,14 +269,16 @@ function bandeauBoutique() {
       'rattacher.</p></div>';
   }
   if (boutique.statut === 'en_attente') {
+    const manque = !boutique.piece_identite_url || !boutique.patente_url;
     return '<div class="bloc" style="border-color:var(--warn)">' +
       '<div class="titreligne"><h2>' + esc(boutique.nom) + '</h2>' +
       '<span class="pill warn">En attente</span></div>' +
-      '<p class="note">Un agent vérifie votre patente et votre pièce d\u2019identité, ' +
-      'puis vous appelle. Vos articles ne sont pas encore visibles des acheteurs.</p>' +
-      '<p class="note">Pièces reçues : ' +
-      (boutique.piece_identite_url ? 'identité' : '—') + ' \u00b7 ' +
-      (boutique.patente_url ? 'patente' : '—') + '</p></div>';
+      '<p class="note">' + (manque
+        ? 'Il manque des pièces. Déposez-les ci-dessous : sans elles, un agent ' +
+          'ne peut pas vérifier votre boutique.'
+        : 'Un agent vérifie vos pièces puis vous appelle. Vos articles ne sont ' +
+          'pas encore visibles des acheteurs.') + '</p>' +
+      blocPieces() + '</div>';
   }
   if (boutique.statut === 'suspendue') {
     return '<div class="bloc" style="border-color:var(--hot)">' +
@@ -300,6 +349,15 @@ document.addEventListener('change', async function (ev) {
       return OPS.majVariante(c.getAttribute('data-vstock'),
         { stock: Math.max(0, parseInt(c.value, 10) || 0) });
     });
+    return;
+  }
+  if (c.id === 'docId') {
+    await deposerPiece('docId', 'identite', 'msgId', 'piece_identite_url');
+    return;
+  }
+  if (c.id === 'docPatente') {
+    await deposerPiece('docPatente', 'patente', 'msgPatente', 'patente_url');
+    return;
   }
 });
 

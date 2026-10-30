@@ -17,7 +17,7 @@
 // À incrémenter à chaque mise en ligne : c'est ce numéro qui purge
 // l'ancien cache. Sans ça, un correctif reste invisible sur les
 // téléphones qui ont déjà ouvert l'app une fois.
-const VERSION = 'bl-v2.1.0';
+const VERSION = 'bl-v2.2.0';
 
 const SQUELETTE = [
   './',
@@ -25,6 +25,7 @@ const SQUELETTE = [
   './config.js',
   './payments.js',
   './api.js',
+  './haiti.js',
   './app.js',
   './manifest.webmanifest',
   './icon.svg',

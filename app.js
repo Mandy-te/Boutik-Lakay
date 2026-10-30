@@ -50,6 +50,13 @@ const T = {
     tracking:'Numéro de suivi Flashipping', trackingLink:'Suivre chez Flashipping',
     yourEmail:'Adresse e-mail (facultatif)',
     account:'Votre compte', pin:'Code secret (6 chiffres)',
+    myAccount:'Mon compte', createAccount:'Créer mon compte',
+    whyAccount:'Un compte vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone. Il nous servira aussi à vous proposer ce qui se vend près de chez vous.',
+    departement:'Département', commune:'Commune',
+    needPlace:'Choisissez votre département et votre commune.',
+    saveProfile:'Enregistrer', saved:'Enregistré.',
+    browseFirst:'Vous pouvez parcourir la boutique sans compte. Il n\u2019est demandé qu\u2019au moment de commander.',
+    goOrder:'Créer mon compte pour commander',
     pinWhy:'Il vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone, même si vous perdez celui-ci.',
     haveAccount:'J\u2019ai déjà un compte', newAccount:'Créer un compte',
     signIn:'Se connecter', signOut:'Se déconnecter',
@@ -106,6 +113,13 @@ const T = {
     tracking:'Nimewo swivi Flashipping', trackingLink:'Swiv li lakay Flashipping',
     yourEmail:'Adrès imèl (si w vle)',
     account:'Kont ou', pin:'Kòd sekrè (6 chif)',
+    myAccount:'Kont mwen', createAccount:'Kreye kont mwen',
+    whyAccount:'Yon kont kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn. L ap sèvi tou pou nou pwopoze w sa k ap vann toupre lakay ou.',
+    departement:'Depatman', commune:'Komin',
+    needPlace:'Chwazi depatman w ak komin ou.',
+    saveProfile:'Anrejistre', saved:'Anrejistre.',
+    browseFirst:'Ou ka gade boutik la san kont. Nou mande l sèlman lè w ap kòmande.',
+    goOrder:'Kreye kont mwen pou m kòmande',
     pinWhy:'Li kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn, menm si w pèdi sa a.',
     haveAccount:'Mwen gen yon kont deja', newAccount:'Kreye yon kont',
     signIn:'Konekte', signOut:'Dekonekte',
@@ -156,6 +170,7 @@ function esc(s) {
 function htg(c) { return new Intl.NumberFormat('fr-FR').format(Math.round(c / 100)) + ' HTG'; }
 function usd(c) { return (c / 100 / CONFIG.tauxUsd).toFixed(2) + ' $'; }
 function el(id) { return document.getElementById(id); }
+function val2(id) { const e = el(id); return e ? e.value.trim() : ''; }
 function glyphe(c) { return c === 'bote' ? 'g-bote' : (c === 'elek' ? 'g-elek' : 'g-rad'); }
 function teinte(c) { return c === 'bote' ? 't-bote' : (c === 'elek' ? 't-elek' : 't-rad'); }
 
@@ -521,51 +536,28 @@ async function rendrePanier() {
   const prof = await API.profil().catch(function () { return null; });
   invite = await API.estInvite().catch(function () { return true; });
 
-  if (invite && modeConnexion) {
-    h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('signIn')) + '</h2></div>' +
-      '<div class="shoplist">' +
-        '<div class="champ"><label for="lTel">' + esc(t('yourPhone')) + '</label>' +
-          '<input id="lTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
-        '<div class="champ"><label for="lPin">' + esc(t('pin')) + '</label>' +
-          '<input id="lPin" type="password" inputmode="numeric" maxlength="6" ' +
-          'autocomplete="current-password"></div>' +
-      '</div>' +
-      '<div id="compteErr"></div>' +
-      '<button class="cta" id="seConnecter">' + esc(t('signIn')) + '</button>' +
-      '<button class="ghost" id="versInscription">' + esc(t('newAccount')) + '</button>';
-  } else if (invite) {
+  if (invite) {
+    // Le compte se crée dans son propre espace, pas au milieu du panier :
+    // un formulaire d'inscription glissé entre les articles et le total
+    // fait abandonner. On explique et on y envoie.
     h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('account')) + '</h2></div>' +
-      '<div class="shoplist">' +
-        '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
-          '<input id="fNom" autocomplete="name" value="' +
-          esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
-        '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
-          '<input id="fTel" type="tel" inputmode="tel" autocomplete="username" value="' +
-          esc(prof ? prof.telephone : '') + '"></div>' +
-        '<div class="champ"><label for="fPin">' + esc(t('pin')) + '</label>' +
-          '<input id="fPin" type="password" inputmode="numeric" maxlength="6" ' +
-          'autocomplete="new-password"></div>' +
-        '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
-          '<input id="fMail" type="email" inputmode="email" autocomplete="email" value="' +
-          esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
-      '</div>' +
-      '<p class="note">' + esc(t('pinWhy')) + '</p>' +
-      '<p class="note" style="padding-top:0">' + esc(t('phoneWhy')) + '</p>' +
-      '<div id="compteErr"></div>' +
-      '<button class="ghost" id="versConnexion">' + esc(t('haveAccount')) + '</button>';
+      '<p class="note">' + esc(t('whyAccount')) + '</p>' +
+      '<button class="cta" data-go="compte">' + esc(t('goOrder')) + '</button>' +
+      '<div style="height:16px"></div>';
   } else {
+    const prof2 = prof;
     h += '<div class="sechead"><h2 style="font-size:15px">' + esc(t('account')) + '</h2>' +
         '<span class="pill done">' + esc(t('connected')) + '</span></div>' +
       '<div class="shoplist">' +
         '<div class="champ"><label for="fNom">' + esc(t('yourName')) + '</label>' +
           '<input id="fNom" autocomplete="name" value="' +
-          esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
+          esc(prof2 && prof2.nom !== 'Nouveau client' ? prof2.nom : '') + '"></div>' +
         '<div class="champ"><label for="fTel">' + esc(t('yourPhone')) + '</label>' +
           '<input id="fTel" type="tel" inputmode="tel" value="' +
-          esc(prof ? prof.telephone : '') + '"></div>' +
+          esc(prof2 ? prof2.telephone : '') + '"></div>' +
         '<div class="champ"><label for="fMail">' + esc(t('yourEmail')) + '</label>' +
           '<input id="fMail" type="email" inputmode="email" value="' +
-          esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
+          esc(prof2 && prof2.email_contact ? prof2.email_contact : '') + '"></div>' +
       '</div>' +
       '<p class="note">' + esc(t('phoneWhy')) + '</p>' +
       '<div id="compteErr"></div>';
@@ -591,7 +583,10 @@ async function rendrePanier() {
   h += blocPaiement();
   h += '<div class="warnbox">' + esc(t('delay')) + '</div>';
   h += '<div id="cartErr"></div>';
-  h += '<button class="cta" id="orderBtn">' + esc(t('order')) + ' · ' + htg(tt.total) + '</button>';
+  // Sans compte, le bouton mène à l'inscription plutôt que d'échouer.
+  h += invite
+    ? '<button class="cta" data-go="compte">' + esc(t('goOrder')) + '</button>'
+    : '<button class="cta" id="orderBtn">' + esc(t('order')) + ' · ' + htg(tt.total) + '</button>';
   h += '<div style="height:20px"></div>';
   zone.innerHTML = h;
 }
@@ -643,6 +638,83 @@ function rendreConfirmation() {
     '<div class="warnbox">' + esc(t('phoneWhy')) + '</div>' +
     '<button class="cta" data-go="orders">' + esc(t('trackBtn')) + '</button>' +
     '<button class="ghost" data-go="home">' + esc(t('backHome')) + '</button>';
+}
+
+/* ---------- Rendu : compte -------------------------------
+
+   Accessible depuis l'accueil, sans passer par le panier. Un
+   visiteur peut créer son compte ou se connecter quand il veut :
+   l'inscription n'est obligatoire qu'au moment de commander.    */
+
+function champsLieu(dep, com, prefixe) {
+  return '<div class="champ"><label for="' + prefixe + 'Dep">' + esc(t('departement')) +
+      '</label><select id="' + prefixe + 'Dep">' + optionsDepartements(dep) + '</select></div>' +
+    '<div class="champ"><label for="' + prefixe + 'Com">' + esc(t('commune')) +
+      '</label><select id="' + prefixe + 'Com">' + optionsCommunes(dep, com) + '</select></div>';
+}
+
+async function rendreCompte() {
+  invite = await API.estInvite().catch(function () { return true; });
+  const prof = invite ? null : await API.profil().catch(function () { return null; });
+  el('compteTitre').textContent = t('myAccount');
+  const z = el('compteCorps');
+
+  if (invite && modeConnexion) {
+    z.innerHTML =
+      '<div class="shoplist">' +
+        '<div class="champ"><label for="lTel">' + esc(t('yourPhone')) + '</label>' +
+          '<input id="lTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
+        '<div class="champ"><label for="lPin">' + esc(t('pin')) + '</label>' +
+          '<input id="lPin" type="password" inputmode="numeric" maxlength="6" ' +
+          'autocomplete="current-password"></div>' +
+      '</div>' +
+      '<div id="compteErr"></div>' +
+      '<button class="cta" id="seConnecter">' + esc(t('signIn')) + '</button>' +
+      '<button class="ghost" id="versInscription">' + esc(t('newAccount')) + '</button>';
+    return;
+  }
+
+  if (invite) {
+    z.innerHTML =
+      '<p class="note" style="padding-top:0">' + esc(t('whyAccount')) + '</p>' +
+      '<div class="shoplist">' +
+        '<div class="champ"><label for="cNom">' + esc(t('yourName')) + '</label>' +
+          '<input id="cNom" autocomplete="name"></div>' +
+        '<div class="champ"><label for="cTel">' + esc(t('yourPhone')) + '</label>' +
+          '<input id="cTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
+        '<div class="champ"><label for="cPin">' + esc(t('pin')) + '</label>' +
+          '<input id="cPin" type="password" inputmode="numeric" maxlength="6" ' +
+          'autocomplete="new-password"></div>' +
+        champsLieu(null, null, 'c') +
+        '<div class="champ"><label for="cMail">' + esc(t('yourEmail')) + '</label>' +
+          '<input id="cMail" type="email" inputmode="email" autocomplete="email"></div>' +
+      '</div>' +
+      '<div id="compteErr"></div>' +
+      '<button class="cta" id="creerCompte">' + esc(t('createAccount')) + '</button>' +
+      '<button class="ghost" id="versConnexion">' + esc(t('haveAccount')) + '</button>' +
+      '<p class="note">' + esc(t('browseFirst')) + '</p>';
+    lierDepartementCommune('cDep', 'cCom');
+    return;
+  }
+
+  const dep = (prof && prof.departement) || departementDe(prof && prof.commune);
+  z.innerHTML =
+    '<div class="shoplist">' +
+      '<div class="champ"><label for="cNom">' + esc(t('yourName')) + '</label>' +
+        '<input id="cNom" value="' + esc(prof && prof.nom !== 'Nouveau client' ? prof.nom : '') + '"></div>' +
+      '<div class="champ"><label for="cTel">' + esc(t('yourPhone')) + '</label>' +
+        '<input id="cTel" type="tel" inputmode="tel" value="' +
+        esc(prof ? prof.telephone : '') + '"></div>' +
+      champsLieu(dep, prof ? prof.commune : null, 'c') +
+      '<div class="champ"><label for="cMail">' + esc(t('yourEmail')) + '</label>' +
+        '<input id="cMail" type="email" inputmode="email" value="' +
+        esc(prof && prof.email_contact ? prof.email_contact : '') + '"></div>' +
+    '</div>' +
+    '<div id="compteErr"></div>' +
+    '<button class="cta" id="majProfil">' + esc(t('saveProfile')) + '</button>' +
+    '<button class="ghost" data-go="orders">' + esc(t('orders')) + '</button>' +
+    '<button class="ghost" id="seDeconnecter">' + esc(t('signOut')) + '</button>';
+  lierDepartementCommune('cDep', 'cCom');
 }
 
 /* ---------- Rendu : commandes ----------------------------- */
@@ -761,7 +833,7 @@ async function rendreCommande() {
 
 /* ---------- Navigation ------------------------------------ */
 
-const VUES = ['home', 'shops', 'shop', 'product', 'cart', 'done', 'orders', 'order'];
+const VUES = ['home', 'shops', 'shop', 'product', 'cart', 'done', 'orders', 'order', 'compte'];
 
 function aller(v) {
   if (v === 'product' || v === 'shop' || v === 'order') vuePrec = vue;
@@ -779,8 +851,15 @@ function aller(v) {
   if (v === 'done') rendreConfirmation();
   if (v === 'orders') rendreCommandes();
   if (v === 'order') rendreCommande();
+  if (v === 'compte') rendreCompte();
   majBandeau();
+  majEtatCompte();
   window.scrollTo(0, 0);
+}
+
+function majEtatCompte() {
+  const s = el('compteEtat');
+  if (s) s.textContent = invite ? '' : t('connected');
 }
 
 function majCompteur() {
@@ -867,7 +946,11 @@ async function envoyerCommande() {
 /* ---------- Événements ----------------------------------- */
 
 document.addEventListener('click', function (ev) {
-  const cible = ev.target;
+  // Un clic atterrit souvent sur l'icône ou le texte À L'INTÉRIEUR du
+  // bouton, pas sur le bouton : on remonte au bouton avant de comparer
+  // les identifiants, sinon les boutons à icône ne répondent jamais.
+  const bouton = ev.target.closest ? ev.target.closest('button') : null;
+  const cible = (bouton && bouton.id) ? bouton : ev.target;
 
   if (cible.id === 'lgFr' || cible.id === 'lgHt') {
     lang = cible.id === 'lgFr' ? 'fr' : 'ht';
@@ -880,8 +963,48 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'orderBack') { aller('orders'); return; }
   if (cible.id === 'orderBtn') { envoyerCommande(); return; }
 
-  if (cible.id === 'versConnexion') { modeConnexion = true; rendrePanier(); return; }
-  if (cible.id === 'versInscription') { modeConnexion = false; rendrePanier(); return; }
+  if (cible.id === 'versConnexion') { modeConnexion = true; rendreCompte(); return; }
+  if (cible.id === 'versInscription') { modeConnexion = false; rendreCompte(); return; }
+
+  if (cible.id === 'compteBtn') { aller('compte'); return; }
+
+  if (cible.id === 'creerCompte') {
+    const nom = val2('cNom'), tel = val2('cTel'), pin = val2('cPin');
+    const dep = val2('cDep'), com = val2('cCom'), mail = val2('cMail');
+    const z = el('compteErr');
+    if (!nom || !API.telValide(tel)) {
+      z.innerHTML = '<div class="erreur">' + esc(API.telValide(tel) ? t('needName') : t('needTel')) + '</div>';
+      return;
+    }
+    if (pin.length !== 6) { z.innerHTML = '<div class="erreur">' + esc(t('needPin')) + '</div>'; return; }
+    if (!dep || !com) { z.innerHTML = '<div class="erreur">' + esc(t('needPlace')) + '</div>'; return; }
+    cible.disabled = true;
+    API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang })
+      .then(function () { return API.majProfil({ departement: dep, commune: com }); })
+      .then(function () {
+        invite = false;
+        ecrireEssais(API.normaliserTel(tel), null);
+        aller(panier.length ? 'cart' : 'home');
+      })
+      .catch(function (e) { z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>'; })
+      .then(function () { cible.disabled = false; });
+    return;
+  }
+
+  if (cible.id === 'majProfil') {
+    const z = el('compteErr');
+    cible.disabled = true;
+    API.majProfil({
+      nom: val2('cNom'), telephone: API.normaliserTel(val2('cTel')),
+      departement: val2('cDep') || null, commune: val2('cCom') || null,
+      email_contact: val2('cMail') || null, langue: lang
+    }).then(function () {
+      z.innerHTML = '<div class="warnbox">' + esc(t('saved')) + '</div>';
+    }).catch(function (e) {
+      z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    }).then(function () { cible.disabled = false; });
+    return;
+  }
 
   if (cible.id === 'seConnecter') {
     const tel = API.normaliserTel((el('lTel').value || '').trim());
@@ -901,7 +1024,7 @@ document.addEventListener('click', function (ev) {
       modeConnexion = false;
       invite = false;
       cache.commandes = [];
-      rendrePanier();
+      aller(panier.length ? 'cart' : 'compte');
     }).catch(function (e) {
       const apres = noterEchec(tel);
       const bloque = blocageRestant(tel);
@@ -1063,6 +1186,7 @@ async function assurerLib() {
   try {
     await API.session();
     invite = await API.estInvite();
+    majEtatCompte();
   } catch (e) { /* hors ligne : on affiche le cache */ }
   await chargerReferentiels();
   await chargerCatalogue();
