@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boutique Lakay</title>
+<meta name="description" content="Marketplace haïtienne. Achetez chez les vendeurs du Grand Nord, retirez votre colis au comptoir Flashipping.">
+<meta name="theme-color" content="#1B2FA0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<style>
+/* Layout : coquille mobile — en-tête collant, rail de catégories,
+   grille produits, barre de navigation basse fixe. */
+:root{
+  --bg:#F6F5F2; --surface:#FFFFFF; --ink:#14161C; --ink-soft:#5B6070; --line:#E3E2DC;
+  --brand:#1B2FA0; --brand-ink:#FFFFFF; --brand-soft:#E8EAFA;
+  --hot:#C8102E; --ok:#1A7F4B; --warn:#8A5A00;
+  --tile-a-bg:#E9ECFB; --tile-a-fg:#2B3FB0;
+  --tile-b-bg:#FBEEE6; --tile-b-fg:#A45A2A;
+  --tile-c-bg:#E6F2EC; --tile-c-fg:#1A6B48;
+  --display:'Archivo Black','Arial Black',Impact,sans-serif;
+  --body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1016; --surface:#171A22; --ink:#F2F2F0; --ink-soft:#9AA0B0; --line:#272B36;
+    --brand:#7C8CF8; --brand-ink:#0E1016; --brand-soft:#1C2140;
+    --hot:#FF6B7A; --ok:#46C084; --warn:#E0A94A;
+    --tile-a-bg:#1B2140; --tile-a-fg:#8C9BFF;
+    --tile-b-bg:#30231A; --tile-b-fg:#D79A6B;
+    --tile-c-bg:#162A22; --tile-c-fg:#5FC894;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1016; --surface:#171A22; --ink:#F2F2F0; --ink-soft:#9AA0B0; --line:#272B36;
+  --brand:#7C8CF8; --brand-ink:#0E1016; --brand-soft:#1C2140;
+  --hot:#FF6B7A; --ok:#46C084; --warn:#E0A94A;
+  --tile-a-bg:#1B2140; --tile-a-fg:#8C9BFF;
+  --tile-b-bg:#30231A; --tile-b-fg:#D79A6B;
+  --tile-c-bg:#162A22; --tile-c-fg:#5FC894;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--body); font-size:15px; line-height:1.5;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+img{max-width:100%}
+[hidden]{display:none!important}
+.wrap{
+  max-width:720px;margin-inline:auto;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+}
+h1,h2,h3{font-family:var(--display);font-weight:400;text-wrap:balance;margin:0;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.hbar{display:flex;align-items:center;gap:10px;padding-block:11px}
+.mark{font-family:var(--display);font-size:19px;letter-spacing:-.03em;display:flex;align-items:baseline;gap:5px;background:none;border:0;padding:0}
+.mark em{font-style:normal;color:var(--hot)}
+.spacer{flex:1}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+.lang button{background:none;border:0;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-soft)}
+.lang button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
+
+.bandeau{background:var(--brand-soft);border-bottom:1px solid var(--line)}
+.bandrow{padding-block:8px;font-size:12px;font-weight:600;color:var(--ink)}
+.offline{background:color-mix(in srgb, var(--warn) 18%, transparent)}
+
+.search{display:flex;gap:8px;padding-block:10px 4px}
+.search input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:11px 13px;font:inherit}
+.rail{display:flex;gap:8px;overflow-x:auto;padding-block:10px;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--ink-soft)}
+.chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-block:4px 20px}
+@media (min-width:560px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;text-align:left;padding:0;min-width:0}
+.tile{aspect-ratio:1/1;max-width:100%;display:grid;place-items:center;position:relative;overflow:hidden}
+.tile img{width:100%;height:100%;object-fit:cover}
+.tile svg{width:46%;height:46%;opacity:.5}
+.t-rad{background:var(--tile-a-bg);color:var(--tile-a-fg)}
+.t-bote{background:var(--tile-b-bg);color:var(--tile-b-fg)}
+.t-elek{background:var(--tile-c-bg);color:var(--tile-c-fg)}
+.boost{position:absolute;top:8px;left:8px;background:var(--hot);color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em;padding:3px 7px;border-radius:4px}
+.cbody{padding:9px 11px 12px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.cname{font-size:13.5px;font-weight:500;line-height:1.35}
+.cshop{font-size:11.5px;color:var(--ink-soft)}
+.cprice{font-size:15px;font-weight:700;margin-top:3px}
+.cusd{font-size:11px;color:var(--ink-soft)}
+
+.sechead{display:flex;align-items:baseline;gap:9px;padding-block:18px 4px}
+.sechead h2{font-size:17px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.note{font-size:12.5px;color:var(--ink-soft);padding-block:8px}
+
+.shoplist{display:flex;flex-direction:column;gap:10px;padding-block:6px 20px}
+.shop,.orow{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;width:100%;min-width:0}
+.avatar{width:46px;height:46px;flex:none;border-radius:10px;display:grid;place-items:center;font-family:var(--display);font-size:17px}
+.shopmeta{min-width:0;display:flex;flex-direction:column;gap:2px}
+.shopname{font-weight:600;font-size:14.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.badge{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:var(--brand-soft);color:var(--brand)}
+.badge.ok{background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok)}
+.shopsub{font-size:12px;color:var(--ink-soft)}
+
+.pwrap{padding-block:14px 20px;display:flex;flex-direction:column;gap:14px}
+.phero{aspect-ratio:4/3;max-width:100%;border-radius:14px;display:grid;place-items:center;overflow:hidden}
+.phero img{width:100%;height:100%;object-fit:cover}
+.phero svg{width:33%;height:33%;opacity:.5}
+.pname{font-size:21px;line-height:1.2}
+.prow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pprice{font-family:var(--display);font-size:25px}
+.variants{display:flex;flex-wrap:wrap;gap:7px}
+.vlabel{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+.trust{background:var(--brand-soft);border-radius:12px;padding:13px 14px;display:flex;gap:11px;align-items:flex-start}
+.trust svg{width:20px;height:20px;flex:none;color:var(--brand);margin-top:1px}
+.trust p{margin:0;font-size:13px;line-height:1.5}
+.trust strong{display:block;font-size:12.5px;margin-bottom:2px}
+.cta{width:100%;background:var(--brand);color:var(--brand-ink);border:0;border-radius:11px;padding:14px;font-size:15px;font-weight:700}
+.cta[disabled]{opacity:.45}
+.ghost{width:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:11px;padding:12px;font-size:14px;font-weight:600}
+.back{background:none;border:0;padding:12px 0 0;font-size:13px;font-weight:600;color:var(--ink-soft)}
+
+.line{display:flex;gap:11px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.lthumb{width:52px;height:52px;flex:none;border-radius:9px;display:grid;place-items:center;overflow:hidden}
+.lthumb img{width:100%;height:100%;object-fit:cover}
+.lthumb svg{width:50%;height:50%;opacity:.5}
+.lmeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.qty{display:flex;align-items:center;gap:4px;flex:none}
+.qty button{width:28px;height:28px;border:1px solid var(--line);background:var(--surface);border-radius:7px;line-height:1;font-size:15px}
+.totals{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:8px}
+.trow{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;color:var(--ink-soft)}
+.trow.big{font-size:17px;font-weight:700;color:var(--ink);border-top:1px solid var(--line);padding-top:9px}
+.picker{display:flex;flex-direction:column;gap:7px}
+.pick{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:11px;text-align:left;width:100%}
+.pick[aria-pressed="true"]{border-color:var(--brand);background:var(--brand-soft)}
+.pick[disabled]{opacity:.5}
+.dot{width:16px;height:16px;flex:none;border-radius:50%;border:2px solid var(--line)}
+.pick[aria-pressed="true"] .dot{border-color:var(--brand);background:var(--brand);box-shadow:inset 0 0 0 3px var(--surface)}
+.empty{text-align:center;padding:48px 0;color:var(--ink-soft);font-size:14px}
+
+.champ{display:flex;flex-direction:column;gap:5px}
+.champ label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+.champ input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:11px 13px;font:inherit}
+
+.code{background:var(--surface);border:2px dashed var(--brand);border-radius:14px;padding:20px;text-align:center}
+.codenum{font-family:var(--display);font-size:35px;letter-spacing:.14em;color:var(--brand);margin-top:5px}
+.steps{display:flex;flex-direction:column}
+.step{display:flex;gap:12px;align-items:flex-start;padding-block:9px}
+.sdot{width:13px;height:13px;flex:none;border-radius:50%;border:2px solid var(--line);margin-top:4px;position:relative}
+.step.done .sdot{background:var(--ok);border-color:var(--ok)}
+.step.now .sdot{border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-soft)}
+.step:not(:last-child) .sdot::after{content:"";position:absolute;left:50%;top:15px;width:2px;height:26px;background:var(--line);transform:translateX(-50%)}
+.step.done .sdot::after{background:var(--ok)}
+.stext{font-size:13.5px}
+.step:not(.done):not(.now) .stext{color:var(--ink-soft)}
+.pill{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:999px;white-space:nowrap;flex:none}
+.pill.att{background:var(--brand-soft);color:var(--brand)}
+.pill.ready{background:color-mix(in srgb, var(--ok) 16%, transparent);color:var(--ok)}
+.pill.done{background:var(--line);color:var(--ink-soft)}
+.pill.ko{background:color-mix(in srgb, var(--hot) 14%, transparent);color:var(--hot)}
+.oref{font-size:12px;font-weight:700;letter-spacing:.03em;color:var(--ink-soft)}
+.warnbox{background:color-mix(in srgb, var(--warn) 14%, transparent);border-radius:11px;padding:12px 13px;font-size:12.5px;line-height:1.5}
+.erreur{background:color-mix(in srgb, var(--hot) 12%, transparent);color:var(--ink);border-radius:11px;padding:12px 13px;font-size:13px}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.nrow{display:flex}
+.nitem{flex:1;min-width:0;background:none;border:0;padding:9px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9.5px;font-weight:600;color:var(--ink-soft);position:relative}
+.nitem span:not(.cartcount){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nitem svg{width:20px;height:20px}
+.nitem[aria-current="page"]{color:var(--brand)}
+.cartcount{position:absolute;top:4px;left:calc(50% + 7px);background:var(--hot);color:#fff;font-size:9.5px;font-weight:700;min-width:16px;height:16px;border-radius:999px;display:grid;place-items:center;padding:0 4px}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-rad" viewBox="0 0 72 72"><path d="M26 13 L36 19 L46 13 L59 22 L52 33 L48 30 L48 59 L24 59 L24 30 L20 33 L13 22 Z" fill="currentColor"/></symbol>
+  <symbol id="g-bote" viewBox="0 0 72 72"><rect x="29" y="9" width="14" height="10" rx="3" fill="currentColor"/><rect x="21" y="21" width="30" height="40" rx="9" fill="currentColor"/></symbol>
+  <symbol id="g-elek" viewBox="0 0 72 72"><rect x="23" y="7" width="26" height="58" rx="7" fill="currentColor"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shop" viewBox="0 0 24 24"><path d="M4 9h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M4 9l1.4-5h13.2L20 9" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-orders" viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.4l2.3 11h9.8l2.1-8H7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="10.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+</svg>
+
+<header>
+  <div class="wrap hbar">
+    <button class="mark" id="markBtn">Boutique <em>Lakay</em></button>
+    <span class="spacer"></span>
+    <div class="lang" role="group" aria-label="Langue">
+      <button id="lgFr" aria-pressed="true">FR</button>
+      <button id="lgHt" aria-pressed="false">KR</button>
+    </div>
+  </div>
+</header>
+
+<div class="bandeau" id="bandeau" hidden>
+  <div class="wrap bandrow" id="bandTxt"></div>
+</div>
+
+<main>
+  <section id="view-home" class="wrap">
+    <div class="search">
+      <input id="q" type="search" autocomplete="off">
+    </div>
+    <div class="rail" id="rail"></div>
+    <div id="boostWrap" hidden>
+      <div class="sechead"><h2 id="boostTitle"></h2></div>
+      <div class="grid" id="boostGrid"></div>
+    </div>
+    <div class="sechead"><h2 id="allTitle"></h2><span class="eyebrow num" id="count"></span></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="view-shops" class="wrap" hidden>
+    <div class="sechead"><h2 id="shopsTitle"></h2></div>
+    <p class="note" id="shopsNote"></p>
+    <div class="shoplist" id="shopList"></div>
+  </section>
+
+  <section id="view-shop" class="wrap" hidden>
+    <button class="back" id="shopBack"></button>
+    <div id="shopHead"></div>
+    <div class="grid" id="shopGrid"></div>
+  </section>
+
+  <section id="view-product" class="wrap" hidden>
+    <button class="back" id="prodBack"></button>
+    <div class="pwrap" id="prod"></div>
+  </section>
+
+  <section id="view-cart" class="wrap" hidden>
+    <div class="sechead"><h2 id="cartTitle"></h2></div>
+    <div id="cartBody"></div>
+  </section>
+
+  <section id="view-done" class="wrap" hidden>
+    <div class="pwrap" id="done"></div>
+  </section>
+
+  <section id="view-orders" class="wrap" hidden>
+    <div class="sechead"><h2 id="ordersTitle"></h2></div>
+    <p class="note" id="ordersNote"></p>
+    <div class="shoplist" id="orderList"></div>
+  </section>
+
+  <section id="view-order" class="wrap" hidden>
+    <button class="back" id="orderBack"></button>
+    <div class="pwrap" id="order"></div>
+  </section>
+</main>
+
+<nav>
+  <div class="wrap nrow">
+    <button class="nitem" data-go="home" aria-current="page"><svg><use href="#i-home"/></svg><span data-nav="home"></span></button>
+    <button class="nitem" data-go="shops"><svg><use href="#i-shop"/></svg><span data-nav="shops"></span></button>
+    <button class="nitem" data-go="orders"><svg><use href="#i-orders"/></svg><span data-nav="orders"></span></button>
+    <button class="nitem" data-go="cart"><svg><use href="#i-cart"/></svg><span data-nav="cart"></span><span class="cartcount" id="cc" hidden>0</span></button>
+  </div>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="payments.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
