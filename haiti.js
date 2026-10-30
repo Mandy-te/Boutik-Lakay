@@ -75,13 +75,45 @@ function communesDe(departement) {
   return HAITI[departement] || [];
 }
 
+/* « Cap-Haitien » et « Cap-Haïtien » sont la même ville pour un
+   humain, et deux villes différentes pour un filtre. Un tarif saisi
+   sans accent ne s'appliquerait jamais, et le point de retrait
+   facturerait son tarif par défaut sans que personne ne comprenne
+   pourquoi. Toute comparaison de lieu passe par cleLieu(), et la
+   fonction cle_lieu() du serveur fait exactement la même chose. */
+function cleLieu(x) {
+  return String(x || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function memeLieu(a, b) {
+  const k = cleLieu(a);
+  return k !== '' && k === cleLieu(b);
+}
+
+// Rend l'orthographe officielle d'une commune saisie à la main, pour
+// qu'on n'ait pas deux graphies de la même ville dans la base.
+function communeCanonique(x) {
+  const k = cleLieu(x);
+  if (!k) return '';
+  for (let i = 0; i < DEPARTEMENTS.length; i++) {
+    const trouve = HAITI[DEPARTEMENTS[i]].filter(function (c) {
+      return cleLieu(c) === k;
+    })[0];
+    if (trouve) return trouve;
+  }
+  return String(x || '').trim();
+}
+
 // Retrouve le département d'une commune : utile pour les données déjà
 // saisies à la main, avant que ces listes existent.
 function departementDe(commune) {
-  const c = String(commune || '').trim().toLowerCase();
+  const c = cleLieu(commune);
+  if (!c) return null;
   for (let i = 0; i < DEPARTEMENTS.length; i++) {
     const d = DEPARTEMENTS[i];
-    if (HAITI[d].some(function (x) { return x.toLowerCase() === c; })) return d;
+    if (HAITI[d].some(function (x) { return cleLieu(x) === c; })) return d;
   }
   return null;
 }
@@ -91,7 +123,7 @@ function departementDe(commune) {
 function optionsDepartements(choisi) {
   return '<option value="">— choisir —</option>' +
     DEPARTEMENTS.map(function (d) {
-      return '<option value="' + d + '"' + (d === choisi ? ' selected' : '') +
+      return '<option value="' + d + '"' + (memeLieu(d, choisi) ? ' selected' : '') +
         '>' + d + '</option>';
     }).join('');
 }
@@ -101,7 +133,7 @@ function optionsCommunes(departement, choisie) {
   if (!liste.length) return '<option value="">— choisissez d’abord un département —</option>';
   return '<option value="">— choisir —</option>' +
     liste.map(function (c) {
-      return '<option value="' + c + '"' + (c === choisie ? ' selected' : '') +
+      return '<option value="' + c + '"' + (memeLieu(c, choisie) ? ' selected' : '') +
         '>' + c + '</option>';
     }).join('');
 }
@@ -121,6 +153,9 @@ if (typeof window !== 'undefined') {
   window.DEPARTEMENTS = DEPARTEMENTS;
   window.communesDe = communesDe;
   window.departementDe = departementDe;
+  window.cleLieu = cleLieu;
+  window.memeLieu = memeLieu;
+  window.communeCanonique = communeCanonique;
   window.optionsDepartements = optionsDepartements;
   window.optionsCommunes = optionsCommunes;
   window.lierDepartementCommune = lierDepartementCommune;

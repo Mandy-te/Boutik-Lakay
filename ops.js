@@ -113,10 +113,18 @@ const OPS = (function () {
     return data;
   }
 
+  /* On enregistre toujours l'orthographe officielle de la commune.
+     Les listes de l'acheteur sont bâties sur ce champ : deux graphies
+     de la même ville y feraient deux entrées, et un tarif saisi sur
+     l'une ne s'appliquerait pas à l'autre. */
+  function lieu(x) {
+    return (typeof communeCanonique === 'function') ? communeCanonique(x) : x;
+  }
+
   async function creerPoint(champs) {
     const { data, error } = await sb().from('points_retrait').insert({
       nom: champs.nom, departement: champs.departement || null,
-      commune: champs.commune, repere: champs.repere,
+      commune: lieu(champs.commune), repere: champs.repere,
       telephone: champs.telephone || null,
       frais: champs.frais, actif: true
     }).select().single();
@@ -125,7 +133,9 @@ const OPS = (function () {
   }
 
   async function majPoint(id, champs) {
-    const { error } = await sb().from('points_retrait').update(champs).eq('id', id);
+    const corps = Object.assign({}, champs);
+    if ('commune' in corps) corps.commune = lieu(corps.commune);
+    const { error } = await sb().from('points_retrait').update(corps).eq('id', id);
     if (error) throw error;
   }
 
@@ -144,7 +154,7 @@ const OPS = (function () {
 
   async function creerTarif(pointId, commune, frais, note) {
     const { data, error } = await sb().from('tarifs_livraison').insert({
-      point_retrait: pointId, commune_origine: commune, frais: frais, note: note || null
+      point_retrait: pointId, commune_origine: lieu(commune), frais: frais, note: note || null
     }).select().single();
     if (error) {
       if (String(error.message).indexOf('duplicate') !== -1) {

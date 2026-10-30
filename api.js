@@ -256,7 +256,11 @@ const API = (function () {
      plusieurs boutiques paie un trajet par boutique. */
   function calculerFrais(point, communesOrigine, lesTarifs) {
     if (!point) return 0;
-    const norm = function (x) { return String(x || '').trim().toLowerCase(); };
+    // La même clé que cle_lieu() côté serveur : sans ça le panier
+    // afficherait un frais et le comptoir en encaisserait un autre.
+    const norm = (typeof cleLieu === 'function') ? cleLieu : function (x) {
+      return String(x || '').trim().toLowerCase();
+    };
     const vues = {};
     (communesOrigine || []).forEach(function (c) { vues[norm(c)] = c; });
     return Object.keys(vues).reduce(function (total, cle) {

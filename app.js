@@ -614,25 +614,34 @@ async function rendrePanier() {
   deps.sort();
 
   // Par défaut, là où habite l'acheteur : c'est presque toujours le bon.
+  // La comparaison ignore accents et casse, sinon un point saisi
+  // « Cap-Haitien » ne serait jamais reconnu comme la ville de
+  // l'acheteur, qui a choisi « Cap-Haïtien » dans la liste.
+  const memeTexte = function (a, b) {
+    return (typeof memeLieu === 'function') ? memeLieu(a, b) : a === b;
+  };
+  const dedans = function (liste, x) {
+    return liste.filter(function (v) { return memeTexte(v, x); })[0] || null;
+  };
+
   if (!depRetrait) {
     const sien = (prof && prof.departement) || departementDe(prof && prof.commune);
-    depRetrait = (sien && deps.indexOf(sien) !== -1) ? sien : (deps[0] || null);
+    depRetrait = dedans(deps, sien) || deps[0] || null;
     comRetrait = null;
   }
 
   const dansDep = pts.filter(function (p) {
-    return (p.departement || departementDe(p.commune)) === depRetrait;
+    return memeTexte(p.departement || departementDe(p.commune), depRetrait);
   });
   const coms = [];
-  dansDep.forEach(function (p) { if (coms.indexOf(p.commune) === -1) coms.push(p.commune); });
+  dansDep.forEach(function (p) { if (!dedans(coms, p.commune)) coms.push(p.commune); });
   coms.sort();
 
-  if (!comRetrait || coms.indexOf(comRetrait) === -1) {
-    const sienne = prof && prof.commune;
-    comRetrait = (sienne && coms.indexOf(sienne) !== -1) ? sienne : (coms[0] || null);
+  if (!comRetrait || !dedans(coms, comRetrait)) {
+    comRetrait = dedans(coms, prof && prof.commune) || coms[0] || null;
   }
 
-  const dansCom = dansDep.filter(function (p) { return p.commune === comRetrait; });
+  const dansCom = dansDep.filter(function (p) { return memeTexte(p.commune, comRetrait); });
   if (!dansCom.some(function (p) { return p.id === pointChoisi; })) {
     pointChoisi = dansCom.length ? dansCom[0].id : null;
   }
@@ -641,12 +650,12 @@ async function rendrePanier() {
     '<div class="shoplist">' +
       '<div class="champ"><label for="rDep">' + esc(t('chooseDep')) + '</label>' +
         '<select id="rDep">' + deps.map(function (d) {
-          return '<option value="' + esc(d) + '"' + (d === depRetrait ? ' selected' : '') +
+          return '<option value="' + esc(d) + '"' + (memeTexte(d, depRetrait) ? ' selected' : '') +
             '>' + esc(d) + '</option>';
         }).join('') + '</select></div>' +
       '<div class="champ"><label for="rCom">' + esc(t('chooseCom')) + '</label>' +
         '<select id="rCom">' + coms.map(function (c) {
-          return '<option value="' + esc(c) + '"' + (c === comRetrait ? ' selected' : '') +
+          return '<option value="' + esc(c) + '"' + (memeTexte(c, comRetrait) ? ' selected' : '') +
             '>' + esc(c) + '</option>';
         }).join('') + '</select></div>' +
     '</div>' +
