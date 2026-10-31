@@ -305,6 +305,69 @@ rattacher à leur vrai propriétaire.
 
 ---
 
+## Sécurité : où est le mur
+
+Il faut être clair sur un point qui prête à confusion.
+
+**Les quatre écrans ne sont pas protégés, et ne peuvent pas l'être.** `admin.html`
+est un fichier public sur GitHub Pages : n'importe qui peut l'ouvrir, lire tout
+le JavaScript, voir l'adresse Supabase et la clé publique dans `config.js`. Cette
+clé est faite pour être publique. Cacher ces fichiers donnerait une illusion de
+sécurité, pas de la sécurité : un navigateur doit pouvoir les lire pour les
+exécuter.
+
+**Le mur est dans la base, et nulle part ailleurs.** Chaque table a ses règles de
+lecture et d'écriture (RLS), et chaque geste qui engage de l'argent ou la parole
+de la plateforme passe par une fonction qui vérifie elle-même le rôle de
+l'appelant. Ouvrir `admin.html` sans être administrateur donne un écran vide :
+la page demande, la base refuse. C'est le bon modèle — celui où la sécurité ne
+dépend pas de ce que le client veut bien s'interdire.
+
+### Ce qui a été essayé, et bloqué
+
+Tout ceci a été tenté pour de vrai contre la base, en se faisant passer
+successivement pour un acheteur, un vendeur et un visiteur sans compte :
+
+- se promouvoir administrateur ; lire les commandes, les comptes ou les codes de
+  retrait d'autrui ; lire le journal d'argent ;
+- faire avancer un colis, encaisser un retrait, déclencher un règlement,
+  retirer la part d'un vendeur ;
+- changer un prix, un stock, le total d'une commande, ajouter une ligne à une
+  commande existante, neutraliser un code de retrait, créer un point de retrait ;
+- côté vendeur : voir le catalogue non publié d'un concurrent, modifier ses prix
+  ou son stock, détourner sa boutique, se publier sans passer par la révision,
+  s'écrire un paiement ;
+- sans compte : lire les comptes, les commandes, les brouillons.
+
+Aucun n'est passé. La vitrine publique reste lisible, ce qui est le but.
+
+### Deux failles trouvées et corrigées
+
+**Un vendeur pouvait se vérifier lui-même.** La règle laissait le propriétaire
+modifier sa boutique — normal pour le nom ou la description — sans distinguer
+les colonnes. Il pouvait donc passer sa boutique de « en attente » à
+« vérifiée » sans avoir déposé ni patente ni pièce d'identité, et porter le
+badge VÉRIFIÉ devant les acheteurs. Le badge ne valait plus rien.
+
+**Et il pouvait la créer déjà vérifiée.** Bloquer la modification ne suffisait
+pas : la même faille passait par la porte de la création.
+
+Désormais quatre champs n'appartiennent plus au vendeur — le statut, le
+propriétaire, la ville et le dépôt de garantie — et une boutique créée par un
+vendeur naît toujours en attente, quoi qu'il envoie. Le reste (nom,
+description, repère, pièces déposées) lui appartient toujours.
+
+### Ce qui reste ouvert, et assumé
+
+Une boutique vérifiée expose le *chemin* de ses pièces justificatives, de la
+forme `<identifiant>/identite-xxxx.jpg`. Le fichier lui-même reste inatteignable :
+le bucket est privé et n'accepte que son propriétaire ou l'équipe. Le chemin ne
+contient ni nom ni numéro. C'est une fuite de faible portée, laissée en l'état
+parce que la corriger demanderait de déplacer ces colonnes dans une table à
+part — faisable, mais à faire posément, pas dans la foulée.
+
+---
+
 ## Ce qui n'est pas encore là
 
 - **L'envoi des messages.** Les avis sont bien produits et lisibles dans
