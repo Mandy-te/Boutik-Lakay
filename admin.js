@@ -26,6 +26,7 @@ let aRegler = [];
 let lesSoldes = [];
 let comptes = [];
 let aRevisers = [];
+let documents = {};   // par boutique : { identite, patente } — table à part, hors de la vitrine
 
 /* Recherche et classement. À cinquante boutiques, faire défiler pour
    retrouver un vendeur devient une corvée ; à cent c'est une faute.
@@ -341,15 +342,18 @@ function carteBoutique(b) {
       ? '<p class="note" style="color:var(--warn)">Aucun plan : la commission du ' +
         'plan gratuit s’appliquera (' + (tauxGratuit() / 100) + ' %).</p>' : '') +
 
-    '<div class="pieces">' +
-      (b.piece_identite_url
-        ? '<button class="mini" data-doc="' + esc(b.piece_identite_url) + '">' +
-          'Voir la pièce d’identité</button>'
-        : '<span class="pill gris">Pièce d’identité manquante</span>') +
-      (b.patente_url
-        ? '<button class="mini" data-doc="' + esc(b.patente_url) + '">Voir la patente</button>'
-        : '<span class="pill gris">Patente manquante</span>') +
-    '</div>' +
+    (function () {
+      const d = documents[b.id] || {};
+      return '<div class="pieces">' +
+        (d.identite
+          ? '<button class="mini" data-doc="' + esc(d.identite) + '">' +
+            'Voir la pièce d’identité</button>'
+          : '<span class="pill gris">Pièce d’identité manquante</span>') +
+        (d.patente
+          ? '<button class="mini" data-doc="' + esc(d.patente) + '">Voir la patente</button>'
+          : '<span class="pill gris">Patente manquante</span>') +
+      '</div>';
+    })() +
 
     '<div id="msg-' + esc(b.id) + '"></div>' +
     '<div class="rangee">' +
@@ -1567,10 +1571,11 @@ async function rechargerBase() {
     OPS.toutesCategories().catch(function () { return []; }),
     OPS.tousPoints().catch(function () { return []; }),
     OPS.communesVendeurs().catch(function () { return []; }),
-    OPS.profilsParRole(null).catch(function () { return []; })
+    OPS.profilsParRole(null).catch(function () { return []; }),
+    OPS.tousDocuments().catch(function () { return {}; })
   ]);
   boutiques = r[0]; lesPlans = r[1]; categories = r[2]; points = r[3];
-  communes = r[4]; comptes = r[5];
+  communes = r[4]; comptes = r[5]; documents = r[6];
 }
 
 /* ---------- Événements propres à l'administration --------- */

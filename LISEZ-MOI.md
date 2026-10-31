@@ -357,14 +357,32 @@ propriétaire, la ville et le dépôt de garantie — et une boutique créée pa
 vendeur naît toujours en attente, quoi qu'il envoie. Le reste (nom,
 description, repère, pièces déposées) lui appartient toujours.
 
-### Ce qui reste ouvert, et assumé
+### Troisième correction : les pièces justificatives
 
-Une boutique vérifiée expose le *chemin* de ses pièces justificatives, de la
-forme `<identifiant>/identite-xxxx.jpg`. Le fichier lui-même reste inatteignable :
-le bucket est privé et n'accepte que son propriétaire ou l'équipe. Le chemin ne
-contient ni nom ni numéro. C'est une fuite de faible portée, laissée en l'état
-parce que la corriger demanderait de déplacer ces colonnes dans une table à
-part — faisable, mais à faire posément, pas dans la foulée.
+`boutiques` est lisible par tout le monde dès qu'une boutique est vérifiée —
+c'est ce qui fait marcher la vitrine. Or les règles de lecture sont par LIGNE,
+pas par colonne : impossible d'y cacher deux champs. Le chemin des pièces
+d'identité et des patentes était donc visible de n'importe qui, même si le
+fichier lui-même restait inatteignable.
+
+Ces chemins vivent maintenant dans `documents_boutique`, une table qui ne
+contient que ça et ne se lit que par le propriétaire de la boutique ou par
+l'équipe. Un acheteur et un visiteur n'y voient rien — pas même l'existence
+d'une pièce. Un vendeur dépose et remplace les siennes, ne touche pas à celles
+d'un concurrent et ne supprime rien.
+
+Les anciennes colonnes `boutiques.piece_identite_url` et
+`boutiques.patente_url` ont été vidées et marquées mortes. Elles restent dans
+le schéma faute de pouvoir les supprimer depuis ici ; pour faire propre, coller
+une fois dans l'éditeur SQL de Supabase :
+
+```sql
+alter table public.boutiques
+  drop column piece_identite_url,
+  drop column patente_url;
+```
+
+Sans urgence : elles sont vides et plus aucun code ne les lit ni ne les écrit.
 
 ---
 

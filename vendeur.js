@@ -21,6 +21,7 @@ let produitEnEdition = null;
 let remplace = null;   // pièce dont on veut déposer une nouvelle version
 let plans = [];
 let avancement = {};   // par colis : combien de vendeurs, combien ont fini
+let mesPieces = {};    // { identite, patente } — table à part, invisible des autres
 
 /* ---------- À préparer ----------------------------------- */
 
@@ -154,9 +155,11 @@ function champPiece(id, libelle, chemin, zone) {
 
 function blocPieces() {
   if (!boutique) return '';
-  const deux = boutique.piece_identite_url && boutique.patente_url;
-  return champPiece('docId', 'Pièce d\u2019identité', boutique.piece_identite_url, 'msgId') +
-    champPiece('docPatente', 'Patente', boutique.patente_url, 'msgPatente') +
+  const deux = mesPieces.identite && mesPieces.patente;
+  return champPiece('docId', 'Pièce d\u2019identité',
+      mesPieces.identite && mesPieces.identite.chemin, 'msgId') +
+    champPiece('docPatente', 'Patente',
+      mesPieces.patente && mesPieces.patente.chemin, 'msgPatente') +
     '<p class="note">' + (deux
       ? 'Vos deux pièces sont arrivées. Un agent les vérifie et vous appelle. ' +
         'Elles restent privées : seule l\u2019équipe de Boutique Lakay peut les consulter.'
@@ -164,7 +167,7 @@ function blocPieces() {
     '</p>';
 }
 
-async function deposerPiece(champ, genre, zoneMsg, colonne) {
+async function deposerPiece(champ, genre, zoneMsg) {
   const input = el(champ);
   const f = input && input.files && input.files[0];
   if (!f || !boutique) return;
@@ -182,9 +185,8 @@ async function deposerPiece(champ, genre, zoneMsg, colonne) {
     .upload(chemin, f, { contentType: f.type || undefined, upsert: true });
   if (up.error) { msg(zoneMsg, up.error.message, 'ko'); return; }
 
-  const champs = {};
-  champs[colonne] = chemin;
-  await OPS.majBoutique(boutique.id, champs);
+  await OPS.deposerDocument(boutique.id, genre, chemin);
+  mesPieces = await OPS.documentsBoutique(boutique.id).catch(function () { return {}; });
   boutique = await API.maBoutique();
   remplace = null;
   await rendre();
@@ -491,7 +493,7 @@ function bandeauBoutique() {
       'rattacher.</p></div>';
   }
   if (boutique.statut === 'en_attente') {
-    const manque = !boutique.piece_identite_url || !boutique.patente_url;
+    const manque = !mesPieces.identite || !mesPieces.patente;
     return '<div class="bloc" style="border-color:var(--warn)">' +
       '<div class="titreligne"><h2>' + esc(boutique.nom) + '</h2>' +
       '<span class="pill warn">En attente</span></div>' +
@@ -675,11 +677,11 @@ document.addEventListener('change', async function (ev) {
     return;
   }
   if (c.id === 'docId') {
-    await deposerPiece('docId', 'identite', 'msgId', 'piece_identite_url');
+    await deposerPiece('docId', 'identite', 'msgId');
     return;
   }
   if (c.id === 'docPatente') {
-    await deposerPiece('docPatente', 'patente', 'msgPatente', 'patente_url');
+    await deposerPiece('docPatente', 'patente', 'msgPatente');
     return;
   }
 
@@ -729,6 +731,9 @@ brancherDeclinaisons(
 
 EQUIPE.brancher(['vendeur', 'admin'], async function () {
   boutique = await API.maBoutique().catch(function () { return null; });
+  mesPieces = boutique
+    ? await OPS.documentsBoutique(boutique.id).catch(function () { return {}; })
+    : {};
   categories = (await API.categories().catch(function () { return { data: [] }; })).data || [];
   plans = await OPS.plans().catch(function () { return []; });
   await rendre();

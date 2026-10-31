@@ -632,6 +632,43 @@ const OPS = (function () {
     return data;
   }
 
+  /* Les pièces justificatives vivent dans leur propre table, lisible
+     par le seul propriétaire de la boutique et par l'équipe. Elles
+     étaient dans `boutiques`, qui est publique dès qu'une boutique
+     est vérifiée : les règles de lecture sont par ligne, pas par
+     colonne, donc il n'y avait aucun moyen d'y cacher deux champs. */
+  async function documentsBoutique(boutiqueId) {
+    const { data, error } = await sb().from('documents_boutique')
+      .select('genre, chemin, depose_le')
+      .eq('boutique', boutiqueId);
+    if (error) throw error;
+    const par = {};
+    (data || []).forEach(function (d) { par[d.genre] = d; });
+    return par;
+  }
+
+  // Tous les documents d'un coup, pour la liste des boutiques : une
+  // requête au lieu d'une par boutique.
+  async function tousDocuments() {
+    const { data, error } = await sb().from('documents_boutique')
+      .select('boutique, genre, chemin');
+    if (error) throw error;
+    const par = {};
+    (data || []).forEach(function (d) {
+      if (!par[d.boutique]) par[d.boutique] = {};
+      par[d.boutique][d.genre] = d.chemin;
+    });
+    return par;
+  }
+
+  async function deposerDocument(boutiqueId, genre, chemin) {
+    const { error } = await sb().from('documents_boutique')
+      .upsert({ boutique: boutiqueId, genre: genre, chemin: chemin,
+                depose_le: new Date().toISOString() },
+              { onConflict: 'boutique,genre' });
+    if (error) throw error;
+  }
+
   /* Les pièces sont dans un bucket privé : il faut une adresse signée,
      valable une heure. On ne les expose jamais en clair. */
   async function lienDocument(chemin) {
@@ -871,6 +908,8 @@ const OPS = (function () {
     profilsParRole: profilsParRole, transfererBoutique: transfererBoutique,
     lienDocument: lienDocument,
     definirRole: definirRole, duAuxVendeurs: duAuxVendeurs,
+    documentsBoutique: documentsBoutique, tousDocuments: tousDocuments,
+    deposerDocument: deposerDocument,
     reglerBoutique: reglerBoutique, soldes: soldes,
     colisAPreparer: colisAPreparer, avancementColis: avancementColis,
     colisOuverts: colisOuverts, chercherColis: chercherColis,

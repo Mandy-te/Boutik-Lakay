@@ -116,7 +116,7 @@ async function creerTout() {
    Bucket privé, un dossier par compte. Le vendeur ne voit que les
    siennes, l'équipe les consulte pour vérifier.                */
 
-async function deposer(champ, genre, zoneMsg, colonne) {
+async function deposer(champ, genre, zoneMsg) {
   const input = el(champ);
   const f = input && input.files && input.files[0];
   if (!f) return;
@@ -135,9 +135,7 @@ async function deposer(champ, genre, zoneMsg, colonne) {
     .upload(chemin, f, { contentType: f.type || undefined, upsert: true });
   if (up.error) { msg(zoneMsg, up.error.message, 'ko'); return; }
 
-  const champs = {};
-  champs[colonne] = chemin;
-  await OPS.majBoutique(boutiqueCreee.id, champs);
+  await OPS.deposerDocument(boutiqueCreee.id, genre, chemin);
   msg(zoneMsg, 'Reçu.', 'ok');
 }
 
@@ -170,10 +168,10 @@ document.addEventListener('click', async function (ev) {
 
 document.addEventListener('change', async function (ev) {
   if (ev.target.id === 'docId') {
-    await deposer('docId', 'identite', 'msgId', 'piece_identite_url');
+    await deposer('docId', 'identite', 'msgId');
   }
   if (ev.target.id === 'docPatente') {
-    await deposer('docPatente', 'patente', 'msgPatente', 'patente_url');
+    await deposer('docPatente', 'patente', 'msgPatente');
   }
 });
 
@@ -200,13 +198,16 @@ document.addEventListener('change', async function (ev) {
     if (!b) return;                     // compte sans boutique : formulaire
 
     boutiqueCreee = b;
-    if (b.piece_identite_url && b.patente_url) {
+    // Les pièces vivent dans leur propre table, lisible par le seul
+    // propriétaire et par l'équipe.
+    const d = await OPS.documentsBoutique(b.id).catch(function () { return {}; });
+    if (d.identite && d.patente) {
       location.replace('vendeur.html'); // tout est déposé, il n'a plus rien à faire ici
       return;
     }
     // Il manque au moins une pièce : on le remet exactement où il s'était arrêté.
-    if (b.piece_identite_url) msg('msgId', 'Déjà reçue.', 'ok');
-    if (b.patente_url) msg('msgPatente', 'Déjà reçue.', 'ok');
+    if (d.identite) msg('msgId', 'Déjà reçue.', 'ok');
+    if (d.patente) msg('msgPatente', 'Déjà reçue.', 'ok');
     montrer('pieces');
   } catch (e) {}
 })();
