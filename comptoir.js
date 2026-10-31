@@ -18,8 +18,13 @@ const COMPTOIR = (function () {
 
   // Appelée après chaque action réussie. Chaque écran donne la sienne.
   let rafraichir = function () {};
+  // Qui est au comptoir : on ne traite pas sa propre commande.
+  let moi = null;
 
-  function brancher(cb) { rafraichir = cb || function () {}; }
+  function brancher(cb) {
+    rafraichir = cb || function () {};
+    API.monId().then(function (id) { moi = id; }).catch(function () {});
+  }
 
   /* Ce que le client paie pour CE colis : ses articles, plus le frais
      de son trajet. Pas le total de la commande — les autres colis se
@@ -64,6 +69,25 @@ const COMPTOIR = (function () {
       }
     });
     const montant = montantColis(k);
+
+    /* Séparation des rôles : personne ne traite sa propre commande.
+       La base le refuse de toute façon, mais mieux vaut le dire avant
+       le clic qu'après : un agent qui voit un bouton grisé comprend,
+       un agent qui reçoit une erreur croit à une panne. */
+    const maCommande = !!moi && o.acheteur_id === moi;
+    if (maCommande) {
+      return '<div class="bloc" style="border-color:var(--warn)">' +
+        '<div class="titreligne"><span class="oref num">' + esc(o.reference || '—') + '</span>' +
+          '<span class="pill warn">Votre commande</span></div>' +
+        '<div class="ligne"><span>Colis</span><strong>n° ' + k.rang + ' · part de ' +
+          esc(k.commune_origine) + '</strong></div>' +
+        '<div class="ligne"><span>État</span><span>' + esc(p.mot) + '</span></div>' +
+        '<div class="note">' + articles(k) + '</div>' +
+        '<p class="note">C’est votre propre commande. Un collègue doit la traiter : ' +
+        'c’est ce qui protège la caisse, et vous aussi le jour où un compte ne ' +
+        'tombe pas juste.</p>' +
+      '</div>';
+    }
 
     let actions = '';
 

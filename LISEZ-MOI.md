@@ -357,6 +357,41 @@ propriétaire, la ville et le dépôt de garantie — et une boutique créée pa
 vendeur naît toujours en attente, quoi qu'il envoie. Le reste (nom,
 description, repère, pièces déposées) lui appartient toujours.
 
+### Quatrième correction : personne ne traite sa propre commande
+
+Un agent est un client comme un autre, et il peut commander avec son compte —
+c'est normal, et le bloquer serait absurde. Mais rien ne l'empêchait de
+confirmer son propre appel, de pousser son colis jusqu'au comptoir et de
+valider son propre code. Un paiement en espèces était enregistré, que personne
+n'avait vu passer : il repartait avec la marchandise et les livres disaient
+qu'il avait payé.
+
+Ce n'était pas un trou dans les droits — un agent a le droit de faire ces
+gestes. C'était un défaut de **séparation** : le même geste ne doit pas être
+demandé et validé par la même personne.
+
+Chaque geste d'équipe refuse désormais de s'appliquer à la commande de celui
+qui le demande : confirmation téléphonique, avancement d'un colis, encaissement,
+annulation, retrait de la part d'un vendeur. Et personne ne règle sa propre
+boutique. Au comptoir, sa propre commande s'affiche sans boutons, avec la
+raison : un collègue doit la traiter.
+
+Deux conséquences voisines, du même esprit :
+
+- **un vendeur achète chez les autres mais pas chez lui-même.** Il y perdrait
+  la commission, donc ce n'est pas une fraude rentable — c'est une fraude de
+  vitrine : quelques commandes à soi-même et une boutique neuve paraît active.
+  Devant un acheteur, ou devant un investisseur à qui on montre les chiffres,
+  ces ventes-là mentent ;
+- **un simple visiteur n'est plus un compte.** Ouvrir la boutique crée une
+  session anonyme — c'est ce qui permet de regarder le catalogue sans
+  s'inscrire — et cette session créait aussi une fiche « Nouveau client ».
+  D'où dix-sept acheteurs pour trois personnes réelles. La fiche se crée
+  maintenant au moment où le compte devient réel. Attention au détail : une
+  session anonyme est promue SUR PLACE, même identifiant, donc c'est une mise
+  à jour de `auth.users` et pas une insertion — d'où le second déclencheur.
+  Sans lui, plus personne n'aurait de fiche.
+
 ### Troisième correction : les pièces justificatives
 
 `boutiques` est lisible par tout le monde dès qu'une boutique est vérifiée —

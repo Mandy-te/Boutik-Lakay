@@ -603,7 +603,7 @@ const OPS = (function () {
   const CHAMPS = 'id, reference, statut, total, cree_le, confirme_tel_le, arrive_le, numero_suivi, ' +
     'expire_le, retire_le, ' +
     'point:points_retrait(nom, commune), ' +
-    'acheteur:profiles(nom, telephone, abandons), ' +
+    'acheteur_id:acheteur, acheteur:profiles(nom, telephone, abandons), ' +
     'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire, ' +
     'boutique:boutiques(id, nom, commune))';
 
@@ -615,7 +615,7 @@ const OPS = (function () {
     'prete_le, embarque_le, arrive_le, expire_le, retire_le, annule_le, motif_annulation, ' +
     'commande:commandes(id, reference, statut, total, cree_le, confirme_tel_le, ' +
       'point:points_retrait(nom, commune), ' +
-      'acheteur:profiles(nom, telephone, abandons)), ' +
+      'acheteur_id:acheteur, acheteur:profiles(nom, telephone, abandons)), ' +
     'lignes:lignes_commande(id, nom_produit, libelle, quantite, prix_unitaire, prete_le, ' +
       'boutique:boutiques(id, nom, commune))';
 
