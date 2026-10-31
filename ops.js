@@ -822,6 +822,18 @@ const OPS = (function () {
     return data;
   }
 
+  /* Un vendeur qui ne remet jamais sa part bloquerait le colis pour
+     toujours. On retire sa part : son stock lui revient, son montant
+     sort du total, l'acheteur est prévenu, et le colis repart avec ce
+     qui a été remis. */
+  async function retirerPartVendeur(colisId, boutiqueId, motif) {
+    const { data, error } = await sb().rpc('retirer_part_vendeur', {
+      p_colis: colisId, p_boutique: boutiqueId, p_motif: motif || null
+    });
+    if (error) throw error;
+    return data;
+  }
+
   // Le vendeur déclare SA part prête. Le colis ne passe « prêt » que
   // lorsque tous les vendeurs de la ville ont fini.
   async function maPartEstPrete(colisId) {
@@ -842,6 +854,7 @@ const OPS = (function () {
     supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
     ETAPES: ETAPES, rangEtape: rangEtape, etapeSuivante: etapeSuivante,
     avancerColis: avancerColis, maPartEstPrete: maPartEstPrete,
+    retirerPartVendeur: retirerPartVendeur,
     toutesCategories: toutesCategories, creerCategorie: creerCategorie,
     majCategorie: majCategorie, basculerCategorie: basculerCategorie,
     produitsBoutique: produitsBoutique, creerProduit: creerProduit,

@@ -121,6 +121,13 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 .colisnom{font-size:14px;font-weight:700}
 .colisfiche .code{margin-top:8px}
 .colisfiche .shoplist{margin-top:10px}
+
+/* Un article retiré de la commande : visible, barré, sans prix
+   trompeur. Il doit expliquer pourquoi le total a baissé, pas
+   disparaître comme s'il n'avait jamais été commandé. */
+.line.retire{opacity:.55}
+.line.retire .cname{text-decoration:line-through}
+.line.retire .cprice{text-decoration:line-through}
 .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
 .lang button{background:none;border:0;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-soft)}
 .lang button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}

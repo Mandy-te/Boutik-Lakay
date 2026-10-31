@@ -236,6 +236,16 @@ Ce qui en découle :
   un simple décompte — combien de vendeurs, combien ont fini — et jamais ce
   que vendent les autres.
 
+**Un vendeur ne peut pas bloquer un colis.** S'il ne remet jamais sa part, on
+la retire : ses articles retournent dans son stock, leur montant sort du total
+que l'acheteur paiera au comptoir, l'acheteur et le vendeur sont prévenus, et
+le colis repart avec ce qui a été remis. Si la part retirée était la dernière
+attendue, le colis passe « prêt » tout seul ; s'il ne reste plus rien, le
+colis s'annule, sans que le compteur d'abandons de l'acheteur bouge — ce
+n'était pas sa faute. Une ligne retirée n'est jamais supprimée : elle reste
+visible, barrée, avec son motif, côté acheteur comme au comptoir. Un total qui
+baisse sans explication est pire qu'un article manquant.
+
 La commande, elle, ne décide plus de rien : son statut et ses totaux sont
 **déduits** de ses colis par un déclencheur. Son statut est celui du colis le
 moins avancé, pour qu'elle ne paraisse jamais terminée alors qu'un colis roule

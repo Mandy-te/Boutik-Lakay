@@ -26,12 +26,20 @@ const COMPTOIR = (function () {
      paient à leur propre retrait. */
   function montantColis(k) {
     return (k.lignes || []).reduce(function (s, l) {
-      return s + l.prix_unitaire * l.quantite;
+      return l.annule_le ? s : s + l.prix_unitaire * l.quantite;
     }, 0) + Number(k.frais || 0);
   }
 
   function articles(k) {
     return (k.lignes || []).map(function (l) {
+      // Une part retirée reste visible, barrée : l'agent au comptoir
+      // doit savoir qu'elle a été commandée et pourquoi elle n'est pas
+      // dans le carton, sinon il cherchera un article qui n'existe pas.
+      if (l.annule_le) {
+        return '<s>' + esc(l.nom_produit) + (l.libelle ? ' · ' + esc(l.libelle) : '') +
+          ' ×' + l.quantite + '</s> <span class="pill ko">retiré</span>' +
+          (l.motif_annulation ? ' <span class="cshop">' + esc(l.motif_annulation) + '</span>' : '');
+      }
       return esc(l.nom_produit) + (l.libelle ? ' · ' + esc(l.libelle) : '') +
         ' <span class="num">×' + l.quantite + '</span>' +
         (l.prete_le ? ' <span class="pill done">remis</span>' : '');
@@ -43,9 +51,17 @@ const COMPTOIR = (function () {
     const p = pastilleStatut(k.statut);
     const ab = o.acheteur && o.acheteur.abandons ? o.acheteur.abandons : 0;
     const suivante = OPS.etapeSuivante(k.statut);
+    // Une ligne retirée ne compte plus : ni dans ce qu'on attend, ni
+    // dans ce qu'on encaisse.
+    const vivantes = (k.lignes || []).filter(function (l) { return !l.annule_le; });
     const vendeurs = {};
-    (k.lignes || []).forEach(function (l) {
-      if (l.boutique) vendeurs[l.boutique.nom] = l.prete_le ? 'prêt' : 'en attente';
+    const enRetard = [];
+    vivantes.forEach(function (l) {
+      if (!l.boutique) return;
+      vendeurs[l.boutique.nom] = l.prete_le ? 'prêt' : 'en attente';
+      if (!l.prete_le && !enRetard.some(function (b) { return b.id === l.boutique.id; })) {
+        enRetard.push(l.boutique);
+      }
     });
     const montant = montantColis(k);
 
@@ -89,6 +105,15 @@ const COMPTOIR = (function () {
         actions += '<p class="note">Normalement ce sont les vendeurs qui déclarent ' +
           'ces étapes depuis leur espace. Le colis ne passe « prêt » que lorsque ' +
           'TOUS les vendeurs de la ville ont remis leur part.</p>';
+        /* Un vendeur qui ne remet jamais sa part bloquerait le colis
+           pour toujours, et annuler le colis entier punirait ceux qui
+           ont déjà remis. On sort la part manquante : son montant est
+           déduit, l'acheteur est prévenu, le reste continue. */
+        enRetard.forEach(function (b) {
+          actions += '<button class="ghost" data-retirer="' + esc(k.id) +
+            '" data-boutique="' + esc(b.id) + '" data-nom="' + esc(b.nom) + '">' +
+            'Retirer la part de ' + esc(b.nom) + '</button>';
+        });
       }
       actions += '<button class="cta" data-avancer="' + esc(k.id) + '" data-vers="' +
         esc(suivante.code) + '">' + esc(suivante.nom) + '</button>';
@@ -205,6 +230,34 @@ const COMPTOIR = (function () {
             (r.restants ? ' Il reste ' + r.restants + ' colis à venir sur cette commande.' : ''), 'ok');
           setTimeout(rafraichir, 1600);
         });
+      return;
+    }
+
+    /* Retirer la part d'un vendeur. Deux appuis, comme pour une
+       annulation : c'est un article qui sort de la commande et un
+       montant qui baisse. */
+    if (c.hasAttribute('data-retirer')) {
+      const id = c.getAttribute('data-retirer');
+      const bId = c.getAttribute('data-boutique');
+      const nom = c.getAttribute('data-nom') || 'ce vendeur';
+      if (c.dataset.sur !== '1') {
+        c.dataset.sur = '1';
+        c.textContent = 'Confirmer : retirer la part de ' + nom;
+        msg('msg-' + id, 'Les articles de ' + nom + ' retournent dans son stock, ' +
+          'leur montant est d\u00e9duit de ce que le client paiera, et le client est ' +
+          'pr\u00e9venu. Le reste du colis continue. Appuie encore pour confirmer.', 'ko');
+        return;
+      }
+      await agir(c, 'msg-' + id, function () {
+        return OPS.retirerPartVendeur(id, bId, 'Article indisponible chez ' + nom);
+      }, function (r) {
+        msg('msg-' + id, r.colis_annule
+          ? 'Part retir\u00e9e. Plus aucun article disponible : le colis a \u00e9t\u00e9 annul\u00e9.'
+          : 'Part retir\u00e9e, ' + htg(r.montant) + ' d\u00e9duits du total. ' +
+            (r.colis_pret ? 'Le colis est maintenant pr\u00eat \u00e0 partir.'
+                          : 'Il reste ' + r.restant + ' article(s) \u00e0 remettre.'), 'ok');
+        setTimeout(rafraichir, 1800);
+      });
       return;
     }
 

@@ -18,6 +18,7 @@ const T = {
     parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
     shopsGrouped:'{n} vendeurs groupés',
     parcelOf:'Colis {n} sur {sur}',
+    removed:'Retiré — non facturé',
     parcelCancelled:'Colis annulé',
     codeParParcel:'Un code par colis : présentez celui du colis que vous venez chercher.',
     messages:'Mes messages',
@@ -93,6 +94,7 @@ const T = {
     parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
     shopsGrouped:'{n} machann ansanm',
     parcelOf:'Pake {n} sou {sur}',
+    removed:'Retire — nou pa fakti l',
     parcelCancelled:'Pake anile',
     codeParParcel:'Yon kòd pou chak pake : montre kòd pake w ap chèche a.',
     messages:'Mesaj mwen',
@@ -1004,11 +1006,16 @@ async function rendreCommande() {
         ) +
 
         '<div class="shoplist">' + lignes.map(function (l) {
-          return '<div class="line">' +
+          // Un article retiré reste visible, barré, avec son motif :
+          // sans ça le total baisse sans explication.
+          return '<div class="line' + (l.annule_le ? ' retire' : '') + '">' +
             '<span class="lthumb t-rad"><svg><use href="#g-rad"/></svg></span>' +
             '<span class="lmeta"><span class="cname">' + esc(l.nom_produit) +
               (l.libelle ? ' · ' + esc(l.libelle) : '') + '</span>' +
-            '<span class="cshop num">×' + l.quantite + '</span>' +
+            (l.annule_le
+              ? '<span class="cshop">' + esc(t('removed')) +
+                (l.motif_annulation ? ' · ' + esc(l.motif_annulation) : '') + '</span>'
+              : '<span class="cshop num">×' + l.quantite + '</span>') +
             '<span class="cprice num">' + htg(l.prix_unitaire * l.quantite) + '</span>' +
             '</span></div>';
         }).join('') + '</div>' +

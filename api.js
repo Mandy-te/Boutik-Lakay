@@ -440,7 +440,8 @@ const API = (function () {
     'point:points_retrait(nom, commune, repere, telephone), ' +
     'colis(id, rang, commune_origine, frais, statut, numero_suivi, prete_le, ' +
       'embarque_le, arrive_le, expire_le, retire_le, annule_le, motif_annulation), ' +
-    'lignes:lignes_commande(nom_produit, libelle, prix_unitaire, quantite, colis)';
+    'lignes:lignes_commande(nom_produit, libelle, prix_unitaire, quantite, colis, ' +
+      'annule_le, motif_annulation)';
 
   async function mesCommandes() {
     await session();
