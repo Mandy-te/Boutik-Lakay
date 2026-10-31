@@ -27,6 +27,49 @@ let lesSoldes = [];
 let comptes = [];
 let aRevisers = [];
 
+/* Recherche et classement. À cinquante boutiques, faire défiler pour
+   retrouver un vendeur devient une corvée ; à cent c'est une faute.
+   Chaque liste longue a donc sa barre : un champ de recherche et des
+   catégories. L'état vit ici pour survivre au re-rendu. */
+let filtres = {
+  comptes:   { q: '', groupe: 'tous' },
+  boutiques: { q: '', groupe: 'toutes' }
+};
+
+// Comparaison tolérante : accents, casse et espaces ignorés, pour
+// qu'on retrouve « Mirèy » en tapant « mirey ».
+function contient(champ, q) {
+  if (!q) return true;
+  const n = function (x) {
+    return String(x || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  };
+  return n(champ).indexOf(n(q)) !== -1;
+}
+
+function barreRecherche(cle, placeholder, groupes) {
+  return '<div class="filtres">' +
+    '<input class="recherche" id="q-' + cle + '" type="search" ' +
+      'placeholder="' + esc(placeholder) + '" value="' + esc(filtres[cle].q) + '">' +
+    '<div class="chips" id="chips-' + cle + '">' + pastillesFiltre(cle, groupes) + '</div>' +
+  '</div>';
+}
+
+function pastillesFiltre(cle, groupes) {
+  return groupes.map(function (g) {
+    return '<button class="chip" data-chip="' + cle + '" data-val="' + esc(g.code) + '" ' +
+      'aria-pressed="' + (filtres[cle].groupe === g.code) + '">' + esc(g.nom) +
+      '<span class="chipnum">' + g.n + '</span></button>';
+  }).join('');
+}
+
+// Un compte d'équipe propriétaire d'une boutique, c'est un conflit
+// d'intérêts : celui qui vérifie les vendeurs est aussi vendeur.
+function estCompteEquipe(profilId) {
+  const p = comptes.filter(function (x) { return x.id === profilId; })[0];
+  return !!p && (p.role === 'admin' || p.role === 'agent');
+}
+
 /* ---------- Onglet Catalogue ----------------------------- */
 
 function optionsCategories(choisie) {
@@ -317,6 +360,13 @@ function carteBoutique(b) {
     (st === 'en_attente'
       ? '<p class="note">Vérifie la patente et la pièce d’identité avant de ' +
         'passer en vitrine. C’est ce qui tient la confiance de la plateforme.</p>' : '') +
+    // Une boutique née au nom d'un agent lui reste tant qu'on ne la
+    // transfère pas. Si personne ne le dit, elle y reste pour toujours.
+    (estCompteEquipe(b.proprietaire)
+      ? '<p class="note" style="color:var(--hot)">Cette boutique appartient à un ' +
+        'compte d’équipe. Celui qui vérifie les vendeurs ne devrait pas être ' +
+        'vendeur : rattache-la à son véritable propriétaire depuis l’onglet ' +
+        'Comptes, ou crée-lui un compte à part.</p>' : '') +
   '</div>';
 }
 
@@ -348,10 +398,37 @@ async function rendreBoutiques() {
           'jusqu’à sa vérification.</p>' +
       '</div>' +
     '</div>' +
-    '<div class="pile">' +
-      (boutiques.length ? boutiques.map(carteBoutique).join('')
-        : '<p class="empty">Aucune boutique. Crée la première ci-dessus.</p>') +
-    '</div>';
+    (function () {
+      const n = function (st) {
+        return boutiques.filter(function (b) { return b.statut === st; }).length;
+      };
+      const sansPlan = boutiques.filter(function (b) { return !planActif(b); }).length;
+      const GROUPES = [
+        { code: 'toutes',     nom: 'Toutes',       n: boutiques.length },
+        { code: 'en_attente', nom: 'À vérifier',   n: n('en_attente') },
+        { code: 'verifiee',   nom: 'Vérifiées',    n: n('verifiee') },
+        { code: 'suspendue',  nom: 'Suspendues',   n: n('suspendue') },
+        { code: 'sans_plan',  nom: 'Sans plan',    n: sansPlan }
+      ];
+      return barreRecherche('boutiques', 'Nom ou commune…', GROUPES);
+    })() +
+    '<div class="pile" id="listeBoutiques">' + listeBoutiques() + '</div>';
+}
+
+function listeBoutiques() {
+  const f = filtres.boutiques;
+  const vues = boutiques.filter(function (b) {
+    if (f.groupe === 'sans_plan') { if (planActif(b)) return false; }
+    else if (f.groupe !== 'toutes' && b.statut !== f.groupe) return false;
+    if (!f.q) return true;
+    return contient(b.nom, f.q) || contient(b.commune, f.q) ||
+           contient(b.adresse_repere, f.q);
+  });
+  if (!boutiques.length) {
+    return '<p class="empty">Aucune boutique. Crée la première ci-dessus.</p>';
+  }
+  if (!vues.length) return '<p class="empty">Aucune boutique ne correspond.</p>';
+  return vues.map(carteBoutique).join('');
 }
 
 /* ---------- Onglet Catégories ---------------------------- */
@@ -1376,45 +1453,91 @@ async function rendreComptes() {
     return;
   }
 
-  const ROLES = [['acheteur', 'Acheteur'], ['vendeur', 'Vendeur'],
-                 ['agent', 'Agent'], ['admin', 'Administrateur']];
+  const n = function (role) {
+    return comptes.filter(function (p) { return p.role === role; }).length;
+  };
+  const GROUPES = [
+    { code: 'tous',     nom: 'Tous',     n: comptes.length },
+    { code: 'acheteur', nom: 'Acheteurs', n: n('acheteur') },
+    { code: 'vendeur',  nom: 'Vendeurs',  n: n('vendeur') },
+    { code: 'agent',    nom: 'Agents',    n: n('agent') },
+    { code: 'admin',    nom: 'Admins',    n: n('admin') }
+  ];
 
   z.innerHTML =
     '<div class="sechead"><h2>Comptes</h2><span class="eyebrow num">' +
       (comptes.length || '') + '</span></div>' +
     '<p class="note">Un vendeur ne voit ses commandes que si une boutique lui est ' +
-      'rattachée. Les boutiques créées par un agent lui appartiennent au départ : ' +
-      'il faut les transférer.</p>' +
-    '<div class="pile">' + comptes.map(function (p) {
-      const sienne = boutiques.filter(function (b) { return b.proprietaire === p.id; });
-      return '<div class="bloc">' +
-        '<div class="titreligne"><h2>' + esc(p.nom || 'Sans nom') + '</h2>' +
-          '<span class="pill ' + (p.role === 'admin' ? 'ko' :
-            (p.role === 'agent' ? 'att' : (p.role === 'vendeur' ? 'ok' : 'gris'))) + '">' +
-          esc(p.role) + '</span></div>' +
-        (p.telephone ? '<div class="ligne"><span>Téléphone</span><span class="num">' +
-          esc(p.telephone) + '</span></div>' : '') +
-        (sienne.length ? '<div class="ligne"><span>Boutique</span><strong>' +
-          sienne.map(function (b) { return esc(b.nom); }).join(', ') + '</strong></div>' : '') +
-        '<div class="champ"><label for="r-' + esc(p.id) + '">Rôle</label>' +
-          '<select id="r-' + esc(p.id) + '" data-role="' + esc(p.id) + '">' +
-            ROLES.map(function (r) {
-              return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') +
-                '>' + r[1] + '</option>';
-            }).join('') + '</select></div>' +
-        (p.role === 'vendeur'
-          ? '<div class="champ"><label for="tb-' + esc(p.id) + '">Rattacher une boutique</label>' +
-            '<select id="tb-' + esc(p.id) + '" data-transfert="' + esc(p.id) + '">' +
-            '<option value="">\u2014 choisir \u2014</option>' +
-            boutiques.map(function (b) {
-              return '<option value="' + esc(b.id) + '"' +
-                (b.proprietaire === p.id ? ' selected' : '') + '>' + esc(b.nom) +
-                ' \u2014 ' + esc(b.commune) + '</option>';
-            }).join('') + '</select></div>'
-          : '') +
-        '<div id="msg-' + esc(p.id) + '"></div>' +
-      '</div>';
-    }).join('') + '</div>';
+      'rattach\u00e9e. Les boutiques cr\u00e9\u00e9es par un agent lui appartiennent au d\u00e9part : ' +
+      'il faut les transf\u00e9rer.</p>' +
+    '<div class="bloc"><div class="titreligne"><h2>Faire entrer un agent</h2></div>' +
+      '<p class="note">Il cr\u00e9e d\u2019abord un compte ordinaire sur la boutique en ligne, ' +
+      'avec son num\u00e9ro et son code \u00e0 six chiffres. Tu lui donnes ensuite le r\u00f4le ' +
+      '\u00ab Agent \u00bb ci-dessous. Il se connecte alors sur cette adresse, qui m\u00e8ne ' +
+      'chacun \u00e0 son \u00e9cran selon son r\u00f4le :</p>' +
+      '<div class="lienbloc num" id="lienEquipe">gestion.html</div>' +
+      '<button class="mini" id="copierLien">Copier le lien complet</button>' +
+      '<div id="msg-lien"></div></div>' +
+    barreRecherche('comptes', 'Nom ou num\u00e9ro\u2026', GROUPES) +
+    '<div class="pile" id="listeComptes">' + listeComptes() + '</div>';
+
+  const lien = el('lienEquipe');
+  if (lien) lien.textContent = location.href.replace(/[^/]*$/, '') + 'gestion.html';
+}
+
+function carteCompte(p) {
+  const ROLES = [['acheteur', 'Acheteur'], ['vendeur', 'Vendeur'],
+                 ['agent', 'Agent'], ['admin', 'Administrateur']];
+  const sienne = boutiques.filter(function (b) { return b.proprietaire === p.id; });
+  const conflit = sienne.length && (p.role === 'admin' || p.role === 'agent');
+
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>' + esc(p.nom || 'Sans nom') + '</h2>' +
+      '<span class="pill ' + (p.role === 'admin' ? 'ko' :
+        (p.role === 'agent' ? 'att' : (p.role === 'vendeur' ? 'ok' : 'gris'))) + '">' +
+      esc(p.role) + '</span></div>' +
+    (p.telephone ? '<div class="ligne"><span>T\u00e9l\u00e9phone</span><span class="num">' +
+      esc(p.telephone) + '</span></div>' : '') +
+    (sienne.length ? '<div class="ligne"><span>Boutique</span><strong>' +
+      sienne.map(function (b) { return esc(b.nom); }).join(', ') + '</strong></div>' : '') +
+    (conflit
+      ? '<p class="note" style="color:var(--hot)">Ce compte d\u2019\u00e9quipe poss\u00e8de une ' +
+        'boutique. Celui qui v\u00e9rifie les vendeurs ne devrait pas \u00eatre vendeur : ' +
+        'rattache-la \u00e0 son v\u00e9ritable propri\u00e9taire, ou cr\u00e9e-lui un compte \u00e0 part.</p>'
+      : '') +
+    '<div class="champ"><label for="r-' + esc(p.id) + '">R\u00f4le</label>' +
+      '<select id="r-' + esc(p.id) + '" data-role="' + esc(p.id) + '">' +
+        ROLES.map(function (r) {
+          return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') +
+            '>' + r[1] + '</option>';
+        }).join('') + '</select></div>' +
+    (p.role === 'vendeur'
+      ? '<div class="champ"><label for="tb-' + esc(p.id) + '">Rattacher une boutique</label>' +
+        '<select id="tb-' + esc(p.id) + '" data-transfert="' + esc(p.id) + '">' +
+        '<option value="">\u2014 choisir \u2014</option>' +
+        boutiques.map(function (b) {
+          return '<option value="' + esc(b.id) + '"' +
+            (b.proprietaire === p.id ? ' selected' : '') + '>' + esc(b.nom) +
+            ' \u2014 ' + esc(b.commune) + '</option>';
+        }).join('') + '</select></div>'
+      : '') +
+    '<div id="msg-' + esc(p.id) + '"></div>' +
+  '</div>';
+}
+
+function listeComptes() {
+  const f = filtres.comptes;
+  const vus = comptes.filter(function (p) {
+    if (f.groupe !== 'tous' && p.role !== f.groupe) return false;
+    if (!f.q) return true;
+    const sienne = boutiques.filter(function (b) { return b.proprietaire === p.id; })
+      .map(function (b) { return b.nom; }).join(' ');
+    return contient(p.nom, f.q) || contient(p.telephone, f.q) || contient(sienne, f.q);
+  });
+  if (!vus.length) {
+    return '<p class="empty">Aucun compte ne correspond.</p>';
+  }
+  return vus.map(carteCompte).join('');
 }
 
 /* ---------- Navigation ----------------------------------- */
@@ -1443,12 +1566,52 @@ async function rechargerBase() {
     OPS.plans().catch(function () { return []; }),
     OPS.toutesCategories().catch(function () { return []; }),
     OPS.tousPoints().catch(function () { return []; }),
-    OPS.communesVendeurs().catch(function () { return []; })
+    OPS.communesVendeurs().catch(function () { return []; }),
+    OPS.profilsParRole(null).catch(function () { return []; })
   ]);
-  boutiques = r[0]; lesPlans = r[1]; categories = r[2]; points = r[3]; communes = r[4];
+  boutiques = r[0]; lesPlans = r[1]; categories = r[2]; points = r[3];
+  communes = r[4]; comptes = r[5];
 }
 
 /* ---------- Événements propres à l'administration --------- */
+
+/* Recherche et catégories.
+
+   On ne re-rend QUE la liste, jamais le champ de saisie : le
+   reconstruire à chaque frappe ferait perdre le curseur au bout
+   d'une lettre, ce qui rend la recherche inutilisable sur un
+   téléphone. */
+function rafraichirListe(cle) {
+  if (cle === 'comptes') {
+    const z = el('listeComptes');
+    if (z) z.innerHTML = listeComptes();
+  } else if (cle === 'boutiques') {
+    const z = el('listeBoutiques');
+    if (z) z.innerHTML = listeBoutiques();
+  }
+}
+
+document.addEventListener('input', function (ev) {
+  const t = ev.target;
+  if (!t || !t.id || t.id.indexOf('q-') !== 0) return;
+  const cle = t.id.slice(2);
+  if (!filtres[cle]) return;
+  filtres[cle].q = t.value;
+  rafraichirListe(cle);
+});
+
+document.addEventListener('click', function (ev) {
+  const c = ev.target.closest ? ev.target.closest('[data-chip]') : null;
+  if (!c) return;
+  const cle = c.getAttribute('data-chip');
+  if (!filtres[cle]) return;
+  filtres[cle].groupe = c.getAttribute('data-val');
+  Array.prototype.forEach.call(
+    document.querySelectorAll('[data-chip="' + cle + '"]'), function (b) {
+      b.setAttribute('aria-pressed', b === c);
+    });
+  rafraichirListe(cle);
+});
 
 /* Les tuiles du tableau de bord sont des blocs, pas des boutons : le
    gestionnaire principal ne regarde que les boutons, donc elles ont
@@ -1604,6 +1767,17 @@ document.addEventListener('click', async function (ev) {
     ongletActif = 'boutiques';
     await rendre();
     window.scrollTo(0, 0);
+    return;
+  }
+  // Le lien d'équipe, prêt à envoyer sur WhatsApp.
+  if (c.id === 'copierLien') {
+    const lien = el('lienEquipe') ? el('lienEquipe').textContent : '';
+    try {
+      await navigator.clipboard.writeText(lien);
+      msg('msg-lien', 'Lien copié. Envoie-le à ton agent.', 'ok');
+    } catch (e) {
+      msg('msg-lien', 'Copie impossible ici. Le lien est : ' + lien, 'ko');
+    }
     return;
   }
   if (c.id === 'retourBoutiques') {

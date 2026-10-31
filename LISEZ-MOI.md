@@ -277,6 +277,34 @@ sur une liste qui peut dater.
 
 ---
 
+## Faire entrer un agent
+
+Il n'y a qu'une adresse pour toute l'équipe : **`gestion.html`**. Elle ne
+montre rien par elle-même — elle regarde le rôle du compte et renvoie chacun
+vers son écran. Un agent arrive au comptoir, un vendeur dans son espace, un
+administrateur choisit entre les trois.
+
+La marche à suivre, dans cet ordre :
+
+1. l'agent crée un compte ordinaire sur la boutique en ligne, avec son numéro
+   et un code à six chiffres, comme n'importe quel acheteur ;
+2. dans l'onglet **Comptes**, tu le retrouves par son nom ou son numéro et tu
+   lui donnes le rôle **Agent** ;
+3. tu lui envoies le lien `gestion.html` — le bouton « Copier le lien
+   complet » le met dans le presse-papiers, prêt pour WhatsApp.
+
+Il n'y a pas de création de compte depuis l'administration, et c'est
+volontaire : le code secret ne doit jamais transiter par toi.
+
+**Un compte d'équipe ne devrait pas posséder de boutique.** Celui qui vérifie
+les vendeurs serait juge et partie, et son argent apparaîtrait dans la dette
+de la plateforme envers ses propres vendeurs. L'administration le signale
+désormais en rouge, dans l'onglet Comptes comme dans la fiche de la boutique.
+Les boutiques créées par un agent lui appartiennent au départ : il faut les
+rattacher à leur vrai propriétaire.
+
+---
+
 ## Ce qui n'est pas encore là
 
 - **L'envoi des messages.** Les avis sont bien produits et lisibles dans
