@@ -68,6 +68,18 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   vertical-align:1px}
 .ong[aria-selected="true"] .pastilleOng{background:var(--brand-ink);color:var(--brand)}
 
+/* Un titre qui ouvre une fiche. Il doit ressembler à un titre, pas à
+   un bouton, mais se voir comme cliquable : sans ça personne ne
+   devine qu'une boutique s'ouvre. */
+.titrelien{background:none;border:0;padding:0;text-align:left;font:inherit;
+  font-family:var(--display);font-size:17px;letter-spacing:-.02em;color:var(--brand);
+  cursor:pointer}
+.titrelien:hover{text-decoration:underline}
+
+/* « Appeler le client » est un lien tel: déguisé en bouton : sans ça
+   il arrive souligné au milieu des vrais boutons. */
+a.cta{text-decoration:none;display:block;text-align:center;box-sizing:border-box}
+
 .pile{display:flex;flex-direction:column;gap:12px;padding-block:8px 28px}
 .bloc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:11px;min-width:0}
 .titreligne{display:flex;align-items:center;gap:9px;flex-wrap:wrap}

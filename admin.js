@@ -19,6 +19,7 @@ let boutiqueOuverte = null;
 let produits = [];
 let produitEnEdition = null;
 let boutiqueEnEdition = null;
+let ficheBoutique = null;     // boutique ouverte en fiche détaillée
 let points = [];
 let communes = [];
 let aRegler = [];
@@ -270,7 +271,10 @@ function carteBoutique(b) {
   const plan = planActif(b);
   const enEdition = boutiqueEnEdition === b.id;
   return '<div class="bloc">' +
-    '<div class="titreligne"><h2>' + esc(b.nom) + '</h2>' +
+    '<div class="titreligne">' +
+      (ficheBoutique === b.id
+        ? '<h2>' + esc(b.nom) + '</h2>'
+        : '<button class="titrelien" data-fiche="' + esc(b.id) + '">' + esc(b.nom) + ' →</button>') +
       '<span class="pill ' + (st === 'verifiee' ? 'ok' : (st === 'suspendue' ? 'ko' : 'warn')) + '">' +
       esc(st === 'verifiee' ? 'Vérifiée' : (st === 'suspendue' ? 'Suspendue' : 'En attente')) +
       '</span></div>' +
@@ -1112,9 +1116,15 @@ async function rendreTableau() {
   const impayes = du.filter(function (l) { return !l.regle; });
   const dette = impayes.reduce(function (s, l) { return s + Number(l.net); }, 0);
   const enAttente = boutiques.filter(function (b) { return b.statut === 'en_attente'; }).length;
+  // Ce qui demande un geste tout de suite : appeler, ou servir au comptoir.
+  majPastilleAFaire(ouvertes.filter(function (k) {
+    return k.statut === 'recue' || k.statut === 'au_point_retrait'; }).length);
 
-  function tuile(titre, valeur, sous, alerte) {
-    return '<div class="bloc"' + (alerte ? ' style="border-color:var(--hot)"' : '') + '>' +
+  function tuile(titre, valeur, sous, alerte, vers) {
+    // Une tuile qui annonce du travail doit y mener : lire « 2 a appeler »
+    // sans pouvoir appeler depuis la meme application, c'est une impasse.
+    return '<div class="bloc"' + (alerte ? ' style="border-color:var(--hot)"' : '') +
+      (vers ? ' data-aller="' + esc(vers) + '" style="cursor:pointer"' : '') + '>' +
       '<div class="slabel" style="font-size:11px;font-weight:700;letter-spacing:.07em;' +
         'text-transform:uppercase;color:var(--ink-soft)">' + esc(titre) + '</div>' +
       '<div style="font-family:var(--display);font-size:24px;letter-spacing:-.02em">' +
@@ -1126,12 +1136,15 @@ async function rendreTableau() {
     '<div class="sechead"><h2>Tableau de bord</h2></div>' +
     '<div class="pile">' +
       tuile('Dette envers les vendeurs', htg(dette),
-            impayes.length + ' colis retiré(s) non réglé(s)', dette > 0) +
-      tuile('À appeler', String(aAppeler), 'Commandes en attente de confirmation') +
+            impayes.length + ' colis retiré(s) non réglé(s)', dette > 0, 'reglements') +
+      tuile('À appeler', String(aAppeler), 'Commandes en attente de confirmation',
+            false, 'comptoir') +
       tuile('Au comptoir', String(auComptoir.length),
-            enRetard ? enRetard + ' au-delà du délai de retrait' : 'Dans les délais', enRetard > 0) +
+            enRetard ? enRetard + ' au-delà du délai de retrait' : 'Dans les délais',
+            enRetard > 0, 'comptoir') +
       tuile('Boutiques à vérifier', String(enAttente),
-            enAttente ? 'Patente et pièce d\u2019identité à contrôler' : 'Rien en attente') +
+            enAttente ? 'Patente et pièce d\u2019identité à contrôler' : 'Rien en attente',
+            false, 'boutiques') +
     '</div>' +
     '<p class="note">La dette envers les vendeurs est le chiffre à surveiller : ' +
       'en phase pilote Flashipping encaisse au comptoir et doit reverser. ' +
@@ -1199,6 +1212,155 @@ async function rendreReglements() {
     }).join('') + '</div>';
 }
 
+/* ---------- Onglet Comptoir ------------------------------
+   Exactement l'écran de l'agent, dans l'administration. Un
+   administrateur qui voit « 2 à appeler » sur son tableau de bord
+   doit pouvoir appeler depuis la même application, pas changer
+   d'écran. Les cartes et les gestes viennent de comptoir.js :
+   un seul endroit où la chaîne est appliquée.                  */
+
+async function rendreComptoirAdm() {
+  const z = el('panneau');
+  z.innerHTML = '<div class="sechead"><h2>Comptoir</h2></div><p class="empty">…</p>';
+  let liste;
+  try {
+    liste = await OPS.colisOuverts();
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+  majPastilleAFaire(liste.filter(function (k) {
+    return k.statut === 'recue' || k.statut === 'au_point_retrait';
+  }).length);
+
+  z.innerHTML =
+    '<div class="sechead"><h2>Comptoir</h2><span class="eyebrow num">' +
+      liste.length + ' colis en cours</span></div>' +
+    COMPTOIR.files(liste);
+}
+
+/* Le nombre de gestes qui attendent, visible depuis les autres
+   onglets : sans ça on ne sait qu'il y a du travail qu'en allant le
+   chercher. On ne compte que ce qui demande une action tout de suite
+   — appeler, ou servir quelqu'un au comptoir. */
+function majPastilleAFaire(n) {
+  const p = el('aFaire');
+  if (!p) return;
+  p.textContent = n > 9 ? '9+' : String(n);
+  p.hidden = !n;
+}
+
+/* ---------- Fiche d'une boutique -------------------------
+   Tout ce qui concerne un vendeur sur un seul écran : son état,
+   son plan, ses pièces, ses colis en cours, ce qu'on lui doit.
+   Jusqu'ici ces informations étaient éparpillées sur quatre
+   onglets, ce qui obligeait à les recoller de tête.            */
+
+function lignesDeLaBoutique(k, bId) {
+  return (k.lignes || []).filter(function (l) {
+    return l.boutique && l.boutique.id === bId;
+  });
+}
+
+async function rendreFicheBoutique() {
+  const z = el('panneau');
+  const b = boutiques.filter(function (x) { return x.id === ficheBoutique; })[0];
+  if (!b) { ficheBoutique = null; return rendreBoutiques(); }
+
+  z.innerHTML = '<div class="sechead"><h2>' + esc(b.nom) + '</h2></div><p class="empty">…</p>';
+
+  let lesColis = [], du = [], sesProduits = [];
+  try {
+    const r = await Promise.all([
+      OPS.colisOuverts().catch(function () { return []; }),
+      OPS.duAuxVendeurs(b.id).catch(function () { return []; }),
+      OPS.produitsBoutique(b.id).catch(function () { return []; })
+    ]);
+    lesColis = r[0]; du = r[1]; sesProduits = r[2];
+  } catch (e) {
+    z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+    return;
+  }
+
+  // Les colis qui contiennent au moins un de SES articles.
+  const siens = lesColis.filter(function (k) { return lignesDeLaBoutique(k, b.id).length; });
+  const par = function (sts) {
+    return siens.filter(function (k) { return sts.indexOf(k.statut) !== -1; });
+  };
+  const aPreparer = par(['confirmee', 'en_preparation']);
+  const prets     = par(['prete']);
+  const enRoute   = par(['en_transit']);
+  const auComptoir= par(['au_point_retrait']);
+  const aAppeler  = par(['recue']);
+
+  const impayes = du.filter(function (x) { return !x.regle; });
+  const dette = impayes.reduce(function (s, x) { return s + Number(x.net); }, 0);
+  const verse = du.filter(function (x) { return x.regle; })
+    .reduce(function (s, x) { return s + Number(x.net); }, 0);
+  const commission = du.reduce(function (s, x) { return s + Number(x.commission); }, 0);
+
+  const enVitrine = sesProduits.filter(function (p) { return p.statut === 'publie'; }).length;
+  const enRevision = sesProduits.filter(function (p) { return p.statut === 'en_revision'; }).length;
+  const stock = sesProduits.reduce(function (s, p) {
+    return s + (p.variantes || []).reduce(function (t, v) { return t + (v.stock || 0); }, 0);
+  }, 0);
+
+  function chiffre(titre, valeur, sous, alerte) {
+    return '<div class="bloc"' + (alerte ? ' style="border-color:var(--hot)"' : '') + '>' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;' +
+        'text-transform:uppercase;color:var(--ink-soft)">' + esc(titre) + '</div>' +
+      '<div style="font-family:var(--display);font-size:22px;letter-spacing:-.02em">' +
+        esc(valeur) + '</div>' +
+      (sous ? '<div class="note">' + esc(sous) + '</div>' : '') + '</div>';
+  }
+
+  function file(titre, items, note) {
+    if (!items.length) return '';
+    return '<div class="sechead"><h2 style="font-size:14px">' + titre + '</h2>' +
+      '<span class="eyebrow num">' + items.length + '</span></div>' +
+      (note ? '<p class="note">' + note + '</p>' : '') +
+      '<div class="pile">' + items.map(COMPTOIR.carteColis).join('') + '</div>';
+  }
+
+  z.innerHTML =
+    '<button class="mini" id="retourBoutiques">← Toutes les boutiques</button>' +
+    '<div class="sechead"><h2>' + esc(b.nom) + '</h2>' +
+      '<span class="pill ' + (b.statut === 'verifiee' ? 'ok'
+        : (b.statut === 'suspendue' ? 'ko' : 'warn')) + '">' +
+      esc(b.statut === 'verifiee' ? 'Vérifiée'
+        : (b.statut === 'suspendue' ? 'Suspendue' : 'En attente')) + '</span></div>' +
+
+    '<div class="pile">' +
+      chiffre('On lui doit', htg(dette),
+        impayes.length + ' colis retiré(s) non réglé(s)', dette > 0) +
+      chiffre('Déjà versé', htg(verse), 'Depuis le début') +
+      chiffre('Commission gardée', htg(commission), 'Sur ses ventes retirées') +
+      chiffre('Colis en cours', String(siens.length),
+        aPreparer.length ? aPreparer.length + ' à préparer' : 'Rien à préparer') +
+      chiffre('Catalogue', String(enVitrine) + ' en vitrine',
+        (enRevision ? enRevision + ' en révision · ' : '') + stock + ' pièces en stock',
+        enRevision > 0) +
+    '</div>' +
+
+    (dette > 0
+      ? '<div id="msg-fiche-' + esc(b.id) + '"></div>' +
+        '<button class="cta" data-regler="' + esc(b.id) + '">Régler ' + htg(dette) +
+        ' à ce vendeur</button>'
+      : '') +
+
+    '<div class="sechead"><h2 style="font-size:14px">La boutique</h2></div>' +
+    '<div class="pile">' + carteBoutique(b) + '</div>' +
+
+    '<div class="sechead"><h2>Ses colis</h2></div>' +
+    (siens.length ? '' : '<p class="empty">Aucun colis en cours pour ce vendeur.</p>') +
+    file('À appeler', aAppeler,
+      'Le client n’a pas encore confirmé : ce vendeur ne voit pas encore la commande.') +
+    file('À préparer', aPreparer) +
+    file('Prêts — en attente du transporteur', prets) +
+    file('En route', enRoute) +
+    file('Au comptoir', auComptoir);
+}
+
 /* ---------- Comptes --------------------------------------
    Qui est qui. Donner un rôle, et surtout rattacher une boutique
    à son vendeur : sans ce rattachement, un vendeur ouvre son
@@ -1262,7 +1424,10 @@ async function rendre() {
     b.setAttribute('aria-selected', b.getAttribute('data-ong') === ongletActif);
   });
   if (ongletActif === 'tableau') await rendreTableau();
-  if (ongletActif === 'boutiques') await rendreBoutiques();
+  if (ongletActif === 'comptoir') await rendreComptoirAdm();
+  if (ongletActif === 'boutiques') {
+    if (ficheBoutique) await rendreFicheBoutique(); else await rendreBoutiques();
+  }
   if (ongletActif === 'catalogue') await rendreCatalogue();
   if (ongletActif === 'categories') await rendreCategories();
   if (ongletActif === 'livraison') await rendreLivraison();
@@ -1284,6 +1449,18 @@ async function rechargerBase() {
 }
 
 /* ---------- Événements propres à l'administration --------- */
+
+/* Les tuiles du tableau de bord sont des blocs, pas des boutons : le
+   gestionnaire principal ne regarde que les boutons, donc elles ont
+   le leur. Une tuile qui annonce du travail doit y mener. */
+document.addEventListener('click', async function (ev) {
+  const t = ev.target.closest ? ev.target.closest('[data-aller]') : null;
+  if (!t) return;
+  ongletActif = t.getAttribute('data-aller');
+  ficheBoutique = null;
+  await rendre();
+  window.scrollTo(0, 0);
+});
 
 document.addEventListener('click', async function (ev) {
   const c = ev.target.closest ? ev.target.closest('button') : null;
@@ -1391,22 +1568,48 @@ document.addEventListener('click', async function (ev) {
 
   if (c.hasAttribute('data-regler')) {
     const b = c.getAttribute('data-regler');
-    const ids = aRegler.filter(function (l) { return l.boutique === b && !l.regle; })
-      .map(function (l) { return l.colis; });
-    // Deux appuis : un règlement écrit dans un journal qui ne se réécrit pas.
+    // Le bouton existe a deux endroits -- l'onglet Reglements et la fiche
+    // d'une boutique -- avec deux zones de message. On ecrit dans celle
+    // qui est presente.
+    const zone = el('msg-reg-' + b) ? 'msg-reg-' + b : 'msg-fiche-' + b;
+    // Deux appuis : un reglement ecrit dans un journal qui ne se reecrit pas.
     if (c.dataset.sur !== '1') {
       c.dataset.sur = '1';
-      c.textContent = 'Confirmer le règlement';
-      msg('msg-reg-' + b, 'À faire une fois l\u2019argent remis au vendeur. ' +
-        'L\u2019écriture est définitive. Appuie encore pour confirmer.', 'ko');
+      c.textContent = 'Confirmer le r\u00e8glement';
+      msg(zone, '\u00c0 faire une fois l\u2019argent remis au vendeur. ' +
+        'L\u2019\u00e9criture est d\u00e9finitive. Appuie encore pour confirmer.', 'ko');
       return;
     }
-    await agir(c, 'msg-reg-' + b, function () { return OPS.reglerBoutique(b, ids); },
-      async function (r) {
-        msg('msg-reg-' + b, r.colis + ' colis réglé(s), ' +
-          htg(r.montant) + ' versés.', 'ok');
-        setTimeout(rendreReglements, 1500);
-      });
+    await agir(c, zone, async function () {
+      // On relit juste avant d'ecrire : la liste affichee peut dater, et
+      // un reglement se fait sur ce qui est du MAINTENANT.
+      const du = await OPS.duAuxVendeurs(b);
+      const ids = du.filter(function (l) { return !l.regle; })
+        .map(function (l) { return l.colis; });
+      if (!ids.length) throw new Error('Plus rien \u00e0 r\u00e9gler pour ce vendeur.');
+      return OPS.reglerBoutique(b, ids);
+    }, async function (r) {
+      msg(zone, r.colis + ' colis r\u00e9gl\u00e9(s), ' + htg(r.montant) + ' vers\u00e9s.', 'ok');
+      setTimeout(function () {
+        if (ficheBoutique === b) rendreFicheBoutique(); else rendreReglements();
+      }, 1500);
+    });
+    return;
+  }
+
+  // Ouvrir la fiche complete d'un vendeur, et en revenir.
+  if (c.hasAttribute('data-fiche')) {
+    ficheBoutique = c.getAttribute('data-fiche');
+    boutiqueEnEdition = null;
+    ongletActif = 'boutiques';
+    await rendre();
+    window.scrollTo(0, 0);
+    return;
+  }
+  if (c.id === 'retourBoutiques') {
+    ficheBoutique = null;
+    await rendre();
+    window.scrollTo(0, 0);
     return;
   }
 });
@@ -1448,6 +1651,7 @@ brancherDeclinaisons(
   }
 );
 
+COMPTOIR.brancher(rendre);
 EQUIPE.brancher(['admin'], async function () {
   await rechargerBase();
   await rendre();

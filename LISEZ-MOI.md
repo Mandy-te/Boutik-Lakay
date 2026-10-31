@@ -245,6 +245,28 @@ colis — et la clôture finale.
 
 ---
 
+## L'administration peut tout faire, depuis un seul écran
+
+L'administrateur a les mêmes gestes de comptoir que l'agent — appeler le
+client, embarquer un colis avec son numéro de suivi, le déclarer arrivé,
+encaisser contre le code, annuler — dans un onglet **Comptoir**. Ces cartes et
+ces boutons vivent dans `comptoir.js`, partagé avec l'écran agent : le même
+geste ne doit pas exister en deux exemplaires, sinon l'un des deux finira par
+laisser sauter une étape que l'autre interdit.
+
+Les tuiles du tableau de bord mènent à l'onglet qui permet d'agir. Lire
+« 2 à appeler » sans pouvoir appeler depuis la même application est une
+impasse.
+
+Dans l'onglet **Boutiques**, cliquer sur le nom d'un vendeur ouvre sa fiche :
+ce qu'on lui doit, ce qu'on lui a déjà versé, la commission gardée, l'état de
+son catalogue, et tous ses colis rangés par étape — à appeler, à préparer,
+prêts, en route, au comptoir — avec les mêmes boutons qu'au comptoir. Le
+règlement se fait depuis là aussi, sur ce qui est dû au moment du clic et non
+sur une liste qui peut dater.
+
+---
+
 ## Ce qui n'est pas encore là
 
 - **L'envoi des messages.** Les avis sont bien produits et lisibles dans
