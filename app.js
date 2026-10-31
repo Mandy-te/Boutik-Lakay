@@ -17,6 +17,9 @@ const T = {
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
     parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
     shopsGrouped:'{n} vendeurs groupés',
+    parcelOf:'Colis {n} sur {sur}',
+    parcelCancelled:'Colis annulé',
+    codeParParcel:'Un code par colis : présentez celui du colis que vous venez chercher.',
     messages:'Mes messages',
     messagesNote:'Les avis sur vos commandes arrivent ici.',
     noMessages:'Aucun message pour le moment.',
@@ -89,6 +92,9 @@ const T = {
     ordersNote:'Swiv chak kòmand jiska retrè a.',
     parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
     shopsGrouped:'{n} machann ansanm',
+    parcelOf:'Pake {n} sou {sur}',
+    parcelCancelled:'Pake anile',
+    codeParParcel:'Yon kòd pou chak pake : montre kòd pake w ap chèche a.',
     messages:'Mesaj mwen',
     messagesNote:'Avi sou kòmand ou yo rive la.',
     noMessages:'Pa gen mesaj pou kounye a.',
@@ -760,11 +766,26 @@ function rendreConfirmation() {
   const c = derniereCommande;
   if (!c) { aller('orders'); return; }
   const pt = cache.points.filter(function (p) { return p.id === pointChoisi; })[0];
+  /* Un code par colis. Avec un seul, rien ne change à l'écran ; avec
+     plusieurs, chacun porte sa ville, sinon l'acheteur se présente au
+     comptoir avec le mauvais code. */
+  const lesCodes = (c.codes && c.codes.length) ? c.codes
+    : [{ rang: 1, commune: '', code: c.code }];
+
   el('done').innerHTML =
     '<div class="sechead"><h2>' + esc(t('doneT')) + '</h2></div>' +
-    '<div class="code"><div class="eyebrow">' + esc(t('codeT')) + '</div>' +
-      '<div class="codenum num">' + esc(c.code) + '</div></div>' +
+    (lesCodes.length > 1
+      ? '<p class="note" style="padding:0">' +
+        esc(t('parcelsN').replace('{n}', lesCodes.length)) + '</p>' : '') +
+    lesCodes.map(function (k) {
+      return '<div class="code"><div class="eyebrow">' + esc(t('codeT')) +
+        (lesCodes.length > 1
+          ? ' · ' + esc(t('parcel') + ' ' + k.rang + ' · ' + k.commune) : '') +
+        '</div><div class="codenum num">' + esc(k.code) + '</div></div>';
+    }).join('') +
     '<p class="note" style="padding:0">' + esc(t('codeNote')) + '</p>' +
+    (lesCodes.length > 1
+      ? '<p class="note" style="padding:0">' + esc(t('codeParParcel')) + '</p>' : '') +
     '<p class="note" style="padding:0">' + esc(t('codeDevice')) + '</p>' +
     (pt ? '<div class="totals"><div class="trow"><span>' + esc(t('pickT')) + '</span>' +
       '<span style="text-align:right">' + esc(pt.nom) + '<br>' +
@@ -916,51 +937,88 @@ async function rendreCommande() {
     }
   }
   const pl = pastille(o.statut);
-  const code = API.codeLocal(o.reference);
-  const fini = o.statut === 'code_valide' || o.statut === 'fonds_liberes';
+  const codes = API.codeLocal(o.reference) || {};
+
+  /* Chaque colis vit sa vie : il a son numéro de suivi, son
+     avancement et son code. Celui du Cap peut être au comptoir
+     pendant que celui de Hinche roule encore, donc on ne peut plus
+     afficher un seul état pour toute la commande. */
+  const colis = (o.colis || []).slice().sort(function (a, b) { return a.rang - b.rang; });
+  const vivants = colis.filter(function (k) { return !k.annule_le; });
 
   zone.innerHTML =
     '<div class="prow"><h1 class="pname">' + esc(o.reference) + '</h1>' +
       '<span class="pill ' + pl.c + '">' + esc(t(pl.k)) + '</span></div>' +
     '<p class="note" style="padding:0">' + esc(t('orderOf')) + ' ' + esc(jour(o.cree_le)) + '</p>' +
-    (fini ? '' :
-      (code
-        ? '<div class="code"><div class="eyebrow">' + esc(t('codeT')) + '</div>' +
-          '<div class="codenum num">' + esc(code) + '</div></div>' +
-          '<p class="note" style="padding:0">' + esc(t('codeNote')) + '</p>'
-        : '') +
-      // Téléphone perdu : le code n'est gardé que haché, personne ne peut
-      // le relire. Avec un compte, on en redemande un et l'ancien meurt.
-      '<div id="codeMsg"></div>' +
-      '<button class="ghost" data-recode="' + esc(o.id) + '">' +
-        esc(t('lostCode')) + '</button>'
-    ) +
     (o.point ? '<div class="totals"><div class="trow"><span>' + esc(t('pickT')) + '</span>' +
       '<span style="text-align:right">' + esc(o.point.nom) + '<br>' +
       '<span class="cshop">' + esc(o.point.repere) + '</span></span></div></div>' : '') +
-    // Dès l'embarquement, le colis est dans le réseau du transporteur :
-    // c'est ce numéro qui le suit, et l'acheteur doit l'avoir sous la main.
-    (o.numero_suivi
-      ? '<div class="totals"><div class="trow"><span>' + esc(t('tracking')) + '</span>' +
-        '<strong class="num">' + esc(o.numero_suivi) + '</strong></div>' +
-        (CONFIG.flashipping && CONFIG.flashipping.suiviUrl
-          ? '<div class="trow"><span></span><a href="' +
-            esc(CONFIG.flashipping.suiviUrl.replace('{numero}', encodeURIComponent(o.numero_suivi))) +
-            '" target="_blank" rel="noopener">' + esc(t('trackingLink')) + '</a></div>'
-          : '') +
-        '</div>'
-      : '') +
-    blocEtapes(o.statut) +
-    (fini ? '' : '<div class="warnbox">' + esc(t('delay')) + '</div>') +
-    '<div class="shoplist">' + (o.lignes || []).map(function (l) {
-      return '<div class="line">' +
-        '<span class="lthumb t-rad"><svg><use href="#g-rad"/></svg></span>' +
-        '<span class="lmeta"><span class="cname">' + esc(l.nom_produit) +
-          (l.libelle ? ' · ' + esc(l.libelle) : '') + '</span>' +
-        '<span class="cshop num">×' + l.quantite + '</span>' +
-        '<span class="cprice num">' + htg(l.prix_unitaire * l.quantite) + '</span>' +
-        '</span></div>';
-    }).join('') + '</div>' +
+
+    colis.map(function (k) {
+      const kpl = pastille(k.statut);
+      const annule = !!k.annule_le;
+      const fini = k.statut === 'code_valide' || k.statut === 'fonds_liberes'
+        || k.statut === 'cloturee';
+      const code = codes[k.id] || (colis.length === 1 ? codes.ancien : null);
+      const lignes = (o.lignes || []).filter(function (l) { return l.colis === k.id; });
+
+      return '<div class="colisfiche' + (annule ? ' mort' : '') + '">' +
+        '<div class="prow" style="margin:0 0 6px">' +
+          '<strong class="colisnom">' +
+            // Le dénominateur compte TOUS les colis, annulés compris :
+            // le rang vient de cet ensemble, sinon on afficherait un
+            // « colis 3 sur 2 » dès qu'un colis est annulé.
+            esc(t('parcelOf').replace('{n}', k.rang).replace('{sur}', colis.length)) +
+            ' · ' + esc(k.commune_origine) + '</strong>' +
+          '<span class="pill ' + kpl.c + '">' + esc(t(kpl.k)) + '</span></div>' +
+
+        (annule
+          ? '<p class="note" style="padding:0">' + esc(t('parcelCancelled')) +
+            (k.motif_annulation ? ' — ' + esc(k.motif_annulation) : '') + '</p>'
+          : (fini ? '' :
+              (code
+                ? '<div class="code"><div class="eyebrow">' + esc(t('codeT')) + '</div>' +
+                  '<div class="codenum num">' + esc(code) + '</div></div>'
+                : '') +
+              // Téléphone perdu : le code n'est gardé que haché, personne
+              // ne peut le relire. Avec un compte, on en redemande un et
+              // l'ancien meurt.
+              '<div id="codeMsg-' + esc(k.id) + '"></div>' +
+              '<button class="ghost" data-recode="' + esc(k.id) + '" ' +
+                'data-ref="' + esc(o.reference) + '">' + esc(t('lostCode')) + '</button>'
+            ) +
+            // Dès l'embarquement, le colis est dans le réseau du
+            // transporteur : c'est ce numéro qui le suit.
+            (k.numero_suivi
+              ? '<div class="totals"><div class="trow"><span>' + esc(t('tracking')) + '</span>' +
+                '<strong class="num">' + esc(k.numero_suivi) + '</strong></div>' +
+                (CONFIG.flashipping && CONFIG.flashipping.suiviUrl
+                  ? '<div class="trow"><span></span><a href="' +
+                    esc(CONFIG.flashipping.suiviUrl.replace('{numero}',
+                      encodeURIComponent(k.numero_suivi))) +
+                    '" target="_blank" rel="noopener">' + esc(t('trackingLink')) + '</a></div>'
+                  : '') +
+                '</div>'
+              : '') +
+            blocEtapes(k.statut)
+        ) +
+
+        '<div class="shoplist">' + lignes.map(function (l) {
+          return '<div class="line">' +
+            '<span class="lthumb t-rad"><svg><use href="#g-rad"/></svg></span>' +
+            '<span class="lmeta"><span class="cname">' + esc(l.nom_produit) +
+              (l.libelle ? ' · ' + esc(l.libelle) : '') + '</span>' +
+            '<span class="cshop num">×' + l.quantite + '</span>' +
+            '<span class="cprice num">' + htg(l.prix_unitaire * l.quantite) + '</span>' +
+            '</span></div>';
+        }).join('') + '</div>' +
+        (annule ? '' : '<div class="totals"><div class="trow"><span>' + esc(t('fee')) +
+          '</span><span class="num">' + htg(k.frais) + '</span></div></div>') +
+      '</div>';
+    }).join('') +
+
+    (vivants.some(function (k) { return k.statut === 'au_point_retrait'; })
+      ? '<div class="warnbox">' + esc(t('delay')) + '</div>' : '') +
     '<div class="totals">' +
       '<div class="trow"><span>' + esc(t('sub')) + '</span><span class="num">' + htg(o.sous_total) + '</span></div>' +
       '<div class="trow"><span>' + esc(t('fee')) + '</span><span class="num">' + htg(o.frais_retrait) + '</span></div>' +
@@ -1272,18 +1330,15 @@ document.addEventListener('click', function (ev) {
   if (!n) return;
 
   if (n.hasAttribute('data-recode')) {
-    const id = n.getAttribute('data-recode');
-    const z = el('codeMsg');
+    // Un code par colis : c'est celui de CE colis qu'on refait, les
+    // autres ne bougent pas.
+    const idColis = n.getAttribute('data-recode');
+    const ref = n.getAttribute('data-ref');
+    const z = el('codeMsg-' + idColis);
     n.disabled = true;
-    API.regenererCode(id).then(function (r) {
-      // On le range localement comme à la commande, pour qu'il survive
-      // à un rechargement de la page.
-      try {
-        const codes = JSON.parse(localStorage.getItem('bl:codes') || '{}');
-        const o = (cache.commandes || []).filter(function (x) { return x.id === id; })[0];
-        if (o) { codes[o.reference] = r.code; localStorage.setItem('bl:codes', JSON.stringify(codes)); }
-      } catch (e) {}
+    API.regenererCodeColis(idColis, ref).then(function () {
       if (z) z.innerHTML = '<div class="warnbox">' + esc(t('newCodeDone')) + '</div>';
+      cache.commandes = [];     // le colis a changé, on relit
       rendreCommande();
     }).catch(function (e) {
       if (z) z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';

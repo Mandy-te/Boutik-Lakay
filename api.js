@@ -207,6 +207,21 @@ const API = (function () {
     return data;
   }
 
+  // Chaque colis a son propre code : c'est celui-là qu'on refait.
+  async function regenererCodeColis(colisId, reference) {
+    const { data, error } = await sb().rpc('regenerer_code_colis', { p_colis: colisId });
+    if (error) throw error;
+    try {
+      const codes = JSON.parse(localStorage.getItem('bl:codes') || '{}');
+      const c = codes[reference];
+      const parColis = (c && typeof c === 'object') ? c : {};
+      parColis[colisId] = data;
+      codes[reference] = parColis;
+      localStorage.setItem('bl:codes', JSON.stringify(codes));
+    } catch (e) { /* sans stockage, le code reste affiché à l'écran */ }
+    return data;
+  }
+
   async function profil() {
     const id = await monId();
     if (!id) return null;
@@ -387,23 +402,34 @@ const API = (function () {
     });
     if (error) throw error;
 
-    // Le code de retrait n'est stocké qu'en haché côté serveur : il ne
-    // pourra jamais être relu. On le garde sur cet appareil pour que
-    // l'acheteur le retrouve, et il est de toute façon réaffichable
-    // par un agent au comptoir.
+    /* Les codes de retrait ne sont stockés qu'en haché côté serveur :
+       ils ne pourront jamais être relus. On les garde sur cet appareil
+       pour que l'acheteur les retrouve, et ils sont de toute façon
+       réaffichables par un agent au comptoir.
+
+       Un code PAR COLIS depuis que chacun se retire séparément. On
+       garde la clé par référence de commande, avec un objet indexé
+       par identifiant de colis. */
     try {
       const codes = JSON.parse(localStorage.getItem('bl:codes') || '{}');
-      codes[data.reference] = data.code;
+      const parColis = {};
+      (data.codes || []).forEach(function (c) { parColis[c.colis] = c.code; });
+      codes[data.reference] = parColis;
       localStorage.setItem('bl:codes', JSON.stringify(codes));
-    } catch (e) { /* sans stockage, le code reste affiché à l'écran */ }
+    } catch (e) { /* sans stockage, les codes restent affichés à l'écran */ }
 
     return data;
   }
 
+  // Renvoie toujours un objet { idColis: code }. Les commandes d'avant
+  // les colis avaient une simple chaîne : on la rend sous la clé
+  // 'ancien' pour que l'écran sache encore l'afficher.
   function codeLocal(reference) {
     try {
       const codes = JSON.parse(localStorage.getItem('bl:codes') || '{}');
-      return codes[reference] || null;
+      const c = codes[reference];
+      if (!c) return null;
+      return (typeof c === 'string') ? { ancien: c } : c;
     } catch (e) { return null; }
   }
 
@@ -412,7 +438,9 @@ const API = (function () {
     'confirme_tel_le, cree_le, prete_le, embarque_le, arrive_le, expire_le, ' +
     'retire_le, cloture_le, numero_suivi, ' +
     'point:points_retrait(nom, commune, repere, telephone), ' +
-    'lignes:lignes_commande(nom_produit, libelle, prix_unitaire, quantite)';
+    'colis(id, rang, commune_origine, frais, statut, numero_suivi, prete_le, ' +
+      'embarque_le, arrive_le, expire_le, retire_le, annule_le, motif_annulation), ' +
+    'lignes:lignes_commande(nom_produit, libelle, prix_unitaire, quantite, colis)';
 
   async function mesCommandes() {
     await session();
@@ -484,7 +512,7 @@ const API = (function () {
     normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
     identifiantInterne: identifiantInterne,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
-    regenererCode: regenererCode,
+    regenererCode: regenererCode, regenererCodeColis: regenererCodeColis,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
     tarifs: tarifs, calculerFrais: calculerFrais, colisDuPanier: colisDuPanier,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,

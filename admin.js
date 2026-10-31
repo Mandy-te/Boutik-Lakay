@@ -1095,17 +1095,20 @@ async function rendreTableau() {
 
   let ouvertes = [], du = [];
   try {
-    ouvertes = await OPS.commandesOuvertes();
+    ouvertes = await OPS.colisOuverts();
     du = await OPS.duAuxVendeurs();
   } catch (e) {
     z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
     return;
   }
 
-  const aAppeler = ouvertes.filter(function (o) { return o.statut === 'recue'; }).length;
-  const auComptoir = ouvertes.filter(function (o) { return o.statut === 'au_point_retrait'; });
-  const enRetard = auComptoir.filter(function (o) {
-    return o.expire_le && new Date(o.expire_le) < Date.now(); }).length;
+  // Le travail se compte en COLIS : c'est l'unite qui voyage et qui
+  // s'encaisse. Une commande partie de trois villes fait trois gestes.
+  const aAppeler = new Set(ouvertes.filter(function (k) { return k.statut === 'recue'; })
+    .map(function (k) { return k.commande ? k.commande.id : k.id; })).size;
+  const auComptoir = ouvertes.filter(function (k) { return k.statut === 'au_point_retrait'; });
+  const enRetard = auComptoir.filter(function (k) {
+    return k.expire_le && new Date(k.expire_le) < Date.now(); }).length;
   const impayes = du.filter(function (l) { return !l.regle; });
   const dette = impayes.reduce(function (s, l) { return s + Number(l.net); }, 0);
   const enAttente = boutiques.filter(function (b) { return b.statut === 'en_attente'; }).length;
@@ -1123,7 +1126,7 @@ async function rendreTableau() {
     '<div class="sechead"><h2>Tableau de bord</h2></div>' +
     '<div class="pile">' +
       tuile('Dette envers les vendeurs', htg(dette),
-            impayes.length + ' commande(s) retirée(s) non réglée(s)', dette > 0) +
+            impayes.length + ' colis retiré(s) non réglé(s)', dette > 0) +
       tuile('À appeler', String(aAppeler), 'Commandes en attente de confirmation') +
       tuile('Au comptoir', String(auComptoir.length),
             enRetard ? enRetard + ' au-delà du délai de retrait' : 'Dans les délais', enRetard > 0) +
@@ -1149,7 +1152,7 @@ async function rendreReglements() {
     return;
   }
 
-  // Groupé par boutique : on règle un vendeur, pas une commande.
+  // Groupé par boutique : on règle un vendeur, pas un colis isolé.
   const parBoutique = {};
   aRegler.filter(function (l) { return !l.regle; }).forEach(function (l) {
     if (!parBoutique[l.boutique]) parBoutique[l.boutique] = { nom: l.boutique_nom, lignes: [] };
@@ -1389,7 +1392,7 @@ document.addEventListener('click', async function (ev) {
   if (c.hasAttribute('data-regler')) {
     const b = c.getAttribute('data-regler');
     const ids = aRegler.filter(function (l) { return l.boutique === b && !l.regle; })
-      .map(function (l) { return l.commande; });
+      .map(function (l) { return l.colis; });
     // Deux appuis : un règlement écrit dans un journal qui ne se réécrit pas.
     if (c.dataset.sur !== '1') {
       c.dataset.sur = '1';
@@ -1400,7 +1403,7 @@ document.addEventListener('click', async function (ev) {
     }
     await agir(c, 'msg-reg-' + b, function () { return OPS.reglerBoutique(b, ids); },
       async function (r) {
-        msg('msg-reg-' + b, r.commandes + ' commande(s) réglée(s), ' +
+        msg('msg-reg-' + b, r.colis + ' colis réglé(s), ' +
           htg(r.montant) + ' versés.', 'ok');
         setTimeout(rendreReglements, 1500);
       });

@@ -211,6 +211,40 @@ et le parcours. À ne faire qu'une fois la société enregistrée.
 
 ---
 
+## Le colis, pas la commande
+
+C'est le point le plus important à comprendre avant de toucher au code.
+
+Une commande peut partir de plusieurs villes. Les articles d'une même ville
+sont emballés ensemble : c'est un **colis**. Il a sa ville de départ, son
+numéro de suivi Flashipping, son avancement et **son propre code de retrait**.
+
+Ce qui en découle :
+
+- **un frais par colis, donc par ville.** Trois vendeurs du Cap dans le même
+  panier ne font payer qu'un trajet. Le Cap plus Hinche en fait payer deux ;
+- **le retrait se fait colis par colis.** L'acheteur vient chercher ce qui est
+  arrivé sans attendre le reste, avec le code de CE colis. Le délai de 72 h
+  court par colis, à partir de son arrivée au comptoir ;
+- **le vendeur est réglé dès que SON colis est retiré**, sans attendre un
+  colis parti d'une autre ville ;
+- **un colis annulé retombe seul** : son montant et son frais sortent du
+  total, les autres continuent. Le compteur d'abandons du client ne monte que
+  si c'est lui qui n'est pas venu — pas quand un vendeur fait défaut ;
+- **le vendeur déclare sa part**, pas le colis. Le colis passe « prêt » tout
+  seul lorsque tous les vendeurs de la ville ont remis la leur. Il voit alors
+  un simple décompte — combien de vendeurs, combien ont fini — et jamais ce
+  que vendent les autres.
+
+La commande, elle, ne décide plus de rien : son statut et ses totaux sont
+**déduits** de ses colis par un déclencheur. Son statut est celui du colis le
+moins avancé, pour qu'elle ne paraisse jamais terminée alors qu'un colis roule
+encore. Les deux seules choses qui restent au niveau de la commande sont
+l'appel de confirmation — on appelle le client une fois, pas une fois par
+colis — et la clôture finale.
+
+---
+
 ## Ce qui n'est pas encore là
 
 - **L'envoi des messages.** Les avis sont bien produits et lisibles dans

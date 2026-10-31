@@ -111,6 +111,16 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
   letter-spacing:.04em;margin-bottom:4px}
 .colisbloc .trow{font-size:12.5px;color:var(--ink-soft);padding-block:3px}
 .colisnote{display:block;font-style:normal;font-size:11px;color:var(--brand);font-weight:600}
+
+/* Une fiche par colis dans le détail d'une commande : chacun a son
+   propre avancement, donc il lui faut son propre cadre, sinon on ne
+   sait plus quelle étape appartient à quel colis. */
+.colisfiche{border:1px solid var(--line);border-radius:14px;padding:13px;margin:12px 0;
+  background:var(--surface)}
+.colisfiche.mort{opacity:.6}
+.colisnom{font-size:14px;font-weight:700}
+.colisfiche .code{margin-top:8px}
+.colisfiche .shoplist{margin-top:10px}
 .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
 .lang button{background:none;border:0;padding:5px 10px;font-size:12px;font-weight:600;color:var(--ink-soft)}
 .lang button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}

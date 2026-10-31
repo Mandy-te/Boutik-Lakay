@@ -607,6 +607,18 @@ const OPS = (function () {
     'lignes:lignes_commande(nom_produit, libelle, quantite, prix_unitaire, ' +
     'boutique:boutiques(id, nom, commune))';
 
+  /* Le travail de l'équipe se fait colis par colis. Un colis porte sa
+     ville de départ, son numéro de suivi et son avancement ; la
+     commande n'apporte plus que le client, la référence et le point
+     de retrait. */
+  const CHAMPS_COLIS = 'id, rang, commune_origine, frais, statut, numero_suivi, cree_le, ' +
+    'prete_le, embarque_le, arrive_le, expire_le, retire_le, annule_le, motif_annulation, ' +
+    'commande:commandes(id, reference, statut, total, cree_le, confirme_tel_le, ' +
+      'point:points_retrait(nom, commune), ' +
+      'acheteur:profiles(nom, telephone, abandons)), ' +
+    'lignes:lignes_commande(id, nom_produit, libelle, quantite, prix_unitaire, prete_le, ' +
+      'boutique:boutiques(id, nom, commune))';
+
   /* ---------- Transfert d'une boutique ---------------------
      Les boutiques naissent au nom de l'agent qui les saisit. Quand
      le vendeur a son propre compte, il faut lui en passer la
@@ -655,9 +667,11 @@ const OPS = (function () {
     return data;
   }
 
-  async function reglerBoutique(boutiqueId, commandes) {
-    const { data, error } = await sb().rpc('regler_boutique', {
-      p_boutique: boutiqueId, p_commandes: commandes
+  // On règle des COLIS : un vendeur est payé dès que le sien est
+  // retiré, sans attendre un colis parti d'une autre ville.
+  async function reglerBoutique(boutiqueId, lesColis) {
+    const { data, error } = await sb().rpc('regler_colis', {
+      p_boutique: boutiqueId, p_colis: lesColis
     });
     if (error) throw error;
     return data;
@@ -674,10 +688,23 @@ const OPS = (function () {
      La sécurité par ligne fait le filtre : il ne voit que les
      siennes, sans qu'on ait à le demander ici.                 */
 
-  async function commandesAPreparer() {
-    const { data, error } = await sb().from('commandes')
-      .select(CHAMPS)
+  /* Combien de vendeurs sur chaque colis, combien ont fini. Rien
+     d'autre : ni nom, ni article, ni montant. C'est ce qui permet de
+     dire « le colis attend encore quelqu'un » sans montrer au vendeur
+     ce que vend son voisin. */
+  async function avancementColis() {
+    const { data, error } = await sb().rpc('mes_colis_avancement');
+    if (error) throw error;
+    const parId = {};
+    (data || []).forEach(function (r) { parId[r.colis] = r; });
+    return parId;
+  }
+
+  async function colisAPreparer() {
+    const { data, error } = await sb().from('colis')
+      .select(CHAMPS_COLIS)
       .in('statut', ['confirmee', 'en_preparation', 'prete', 'en_transit'])
+      .is('annule_le', null)
       .order('cree_le', { ascending: true });
     if (error) throw error;
     return data;
@@ -685,17 +712,32 @@ const OPS = (function () {
 
   /* ---------- Comptoir ------------------------------------ */
 
-
-  // Les commandes qui attendent un geste de l'équipe, les plus vieilles
+  // Les colis qui attendent un geste de l'équipe, les plus vieux
   // d'abord : c'est l'ordre dans lequel un comptoir travaille.
-  async function commandesOuvertes() {
-    const { data, error } = await sb().from('commandes')
-      .select(CHAMPS)
+  async function colisOuverts() {
+    const { data, error } = await sb().from('colis')
+      .select(CHAMPS_COLIS)
       .in('statut', ['recue', 'confirmee', 'en_preparation', 'prete', 'en_transit',
                      'payee', 'fonds_bloques', 'au_point_retrait', 'code_valide'])
+      .is('annule_le', null)
       .order('cree_le', { ascending: true });
     if (error) throw error;
     return data;
+  }
+
+  // Recherche par référence de commande : elle rend TOUS ses colis,
+  // parce qu'au comptoir le client donne sa référence, pas un
+  // identifiant de colis.
+  async function chercherColis(reference) {
+    const ref = (reference || '').trim();
+    if (!ref) return [];
+    const { data, error } = await sb().from('colis')
+      .select(CHAMPS_COLIS)
+      .order('rang', { ascending: true });
+    if (error) throw error;
+    return (data || []).filter(function (k) {
+      return k.commande && String(k.commande.reference).toLowerCase() === ref.toLowerCase();
+    });
   }
 
   async function chercherCommande(reference) {
@@ -739,29 +781,51 @@ const OPS = (function () {
     return e.code === 'code_valide' ? null : e;
   }
 
-  async function avancerCommande(id, statut, numeroSuivi) {
-    const { data, error } = await sb().rpc('avancer_commande', {
-      p_commande: id, p_statut: statut, p_numero_suivi: numeroSuivi || null
+  /* C'est le COLIS qui avance, pas la commande : celui du Cap peut
+     être au comptoir pendant que celui de Hinche roule encore. Seul
+     l'appel de confirmation reste au niveau de la commande, parce
+     qu'on appelle le client une fois, pas une fois par colis. */
+  async function avancerColis(id, statut, numeroSuivi) {
+    const { data, error } = await sb().rpc('avancer_colis', {
+      p_colis: id, p_statut: statut, p_numero_suivi: numeroSuivi || null
     });
     if (error) throw error;
     return data;
   }
 
-  async function confirmerTelephone(id) { return avancerCommande(id, 'confirmee'); }
-  async function marquerArrivee(id) { return avancerCommande(id, 'au_point_retrait'); }
+  async function confirmerTelephone(commandeId) {
+    const { data, error } = await sb().rpc('confirmer_telephone', { p_commande: commandeId });
+    if (error) throw error;
+    return data;
+  }
 
-  async function validerRetrait(id, code, moyen) {
-    const { data, error } = await sb().rpc('valider_retrait', {
-      p_commande: id, p_code: (code || '').trim(), p_moyen: moyen || 'especes'
+  async function marquerArrivee(colisId) { return avancerColis(colisId, 'au_point_retrait'); }
+
+  async function validerRetrait(colisId, code, moyen) {
+    const { data, error } = await sb().rpc('valider_retrait_colis', {
+      p_colis: colisId, p_code: (code || '').trim(), p_moyen: moyen || 'especes'
     });
     if (error) throw error;
     return data;
   }
 
-  async function marquerAbandon(id, motif) {
-    const { data, error } = await sb().rpc('marquer_abandon', {
-      p_commande: id, p_motif: motif || null
+  /* Un colis annulé retombe seul : son montant et son frais sortent du
+     total, les autres colis continuent. fauteAcheteur distingue le
+     client qui ne se présente pas — son compteur d'abandons monte —
+     du vendeur défaillant, qui ne doit rien coûter à l'acheteur. */
+  async function annulerColis(colisId, motif, fauteAcheteur) {
+    const { data, error } = await sb().rpc('annuler_colis', {
+      p_colis: colisId, p_motif: motif || null,
+      p_faute_acheteur: !!fauteAcheteur
     });
+    if (error) throw error;
+    return data;
+  }
+
+  // Le vendeur déclare SA part prête. Le colis ne passe « prêt » que
+  // lorsque tous les vendeurs de la ville ont fini.
+  async function maPartEstPrete(colisId) {
+    const { data, error } = await sb().rpc('ma_part_est_prete', { p_colis: colisId });
     if (error) throw error;
     return data;
   }
@@ -777,7 +841,7 @@ const OPS = (function () {
     supprimerPoint: supprimerPoint, creerTarif: creerTarif, majTarif: majTarif,
     supprimerTarif: supprimerTarif, communesVendeurs: communesVendeurs,
     ETAPES: ETAPES, rangEtape: rangEtape, etapeSuivante: etapeSuivante,
-    avancerCommande: avancerCommande,
+    avancerColis: avancerColis, maPartEstPrete: maPartEstPrete,
     toutesCategories: toutesCategories, creerCategorie: creerCategorie,
     majCategorie: majCategorie, basculerCategorie: basculerCategorie,
     produitsBoutique: produitsBoutique, creerProduit: creerProduit,
@@ -795,10 +859,11 @@ const OPS = (function () {
     lienDocument: lienDocument,
     definirRole: definirRole, duAuxVendeurs: duAuxVendeurs,
     reglerBoutique: reglerBoutique, soldes: soldes,
-    commandesAPreparer: commandesAPreparer,
-    commandesOuvertes: commandesOuvertes, chercherCommande: chercherCommande,
+    colisAPreparer: colisAPreparer, avancementColis: avancementColis,
+    colisOuverts: colisOuverts, chercherColis: chercherColis,
+    chercherCommande: chercherCommande,
     confirmerTelephone: confirmerTelephone, marquerArrivee: marquerArrivee,
-    validerRetrait: validerRetrait, marquerAbandon: marquerAbandon
+    validerRetrait: validerRetrait, annulerColis: annulerColis
   };
 })();
 

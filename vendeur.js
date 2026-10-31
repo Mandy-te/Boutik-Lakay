@@ -20,42 +20,65 @@ let categories = [];
 let produitEnEdition = null;
 let remplace = null;   // pièce dont on veut déposer une nouvelle version
 let plans = [];
+let avancement = {};   // par colis : combien de vendeurs, combien ont fini
 
 /* ---------- À préparer ----------------------------------- */
 
-function mesLignes(o) {
+function mesLignes(k) {
   if (!boutique) return [];
-  return (o.lignes || []).filter(function (l) {
+  return (k.lignes || []).filter(function (l) {
     return l.boutique && l.boutique.id === boutique.id;
   });
 }
 
-function carteCommande(o) {
-  const p = pastilleStatut(o.statut);
-  const lignes = mesLignes(o);
+/* Le vendeur voit des COLIS, pas des commandes. Son colis est celui
+   qui part de sa ville ; il peut contenir les articles d'autres
+   vendeurs de la même ville, et il ne partira que lorsque tout le
+   monde aura remis sa part. */
+function carteColis(k) {
+  const o = k.commande || {};
+  const p = pastilleStatut(k.statut);
+  const lignes = mesLignes(k);
   if (!lignes.length) return '';
 
-  const suivante = OPS.etapeSuivante(o.statut);
-  const aMoi = suivante && (suivante.code === 'en_preparation' || suivante.code === 'prete');
+  const maPartFaite = lignes.every(function (l) { return !!l.prete_le; });
+  const aMoi = ['confirmee', 'en_preparation'].indexOf(k.statut) !== -1;
+  // On ne voit pas les lignes des autres vendeurs, et c'est voulu :
+  // seul un decompte dit si le colis attend encore quelqu'un.
+  const av = avancement[k.id] || { vendeurs: 1, prets: maPartFaite ? 1 : 0 };
+  const autresVendeurs = Math.max(0, av.vendeurs - 1);
+  const autresEnRetard = Math.max(0, av.vendeurs - av.prets - (maPartFaite ? 0 : 1));
 
   return '<div class="bloc">' +
-    '<div class="titreligne"><span class="oref num">' + esc(o.reference) + '</span>' +
+    '<div class="titreligne"><span class="oref num">' + esc(o.reference || '—') + '</span>' +
       '<span class="pill ' + p.c + '">' + esc(p.mot) + '</span></div>' +
     '<div class="ligne"><span>Commandée</span><span>' + esc(quand(o.cree_le)) + '</span></div>' +
     '<div class="ligne"><span>À livrer à</span><strong>' +
       esc(o.point ? o.point.nom : '—') + '</strong></div>' +
     '<div class="note">' + lignes.map(function (l) {
       return esc(l.nom_produit) + (l.libelle ? ' · ' + esc(l.libelle) : '') +
-        ' <span class="num">×' + l.quantite + '</span>';
+        ' <span class="num">×' + l.quantite + '</span>' +
+        (l.prete_le ? ' <span class="pill done">remis</span>' : '');
     }).join('<br>') + '</div>' +
     '<div class="ligne"><span>Votre part</span><strong class="num">' +
       htg(lignes.reduce(function (s, l) { return s + l.prix_unitaire * l.quantite; }, 0)) +
       '</strong></div>' +
-    '<div id="msg-' + esc(o.id) + '"></div>' +
-    (aMoi
-      ? '<button class="cta" data-avancer="' + esc(o.id) + '" data-vers="' +
-        esc(suivante.code) + '">' + esc(suivante.nom) + '</button>'
-      : '<p class="note">Rien à faire de votre côté : Flashipping prend le relais.</p>') +
+    (autresVendeurs
+      ? '<p class="note">Ce colis part de ' + esc(k.commune_origine) + ' avec ' +
+        autresVendeurs + ' autre(s) vendeur(s) de la m\u00eame ville. ' +
+        (autresEnRetard
+          ? 'Il en reste ' + autresEnRetard + ' \u00e0 remettre leur part avant le d\u00e9part.'
+          : 'Tous ont remis leur part.') + '</p>'
+      : '') +
+    '<div id="msg-' + esc(k.id) + '"></div>' +
+    (aMoi && !maPartFaite
+      ? '<button class="cta" data-pret="' + esc(k.id) + '">Ma part est pr\u00eate</button>'
+      : (maPartFaite && k.statut !== 'en_transit'
+          ? '<p class="note">Votre part est remise. ' +
+            (autresEnRetard
+              ? 'Le colis attend les autres vendeurs de la ville.'
+              : 'Flashipping passe le prendre.') + '</p>'
+          : '<p class="note">Rien \u00e0 faire de votre c\u00f4t\u00e9 : Flashipping prend le relais.</p>')) +
   '</div>';
 }
 
@@ -71,7 +94,8 @@ function majPastilleOng(n) {
 
 async function compterAPreparer() {
   try {
-    const liste = await OPS.commandesAPreparer();
+    const liste = await OPS.colisAPreparer();
+    avancement = await OPS.avancementColis().catch(function () { return {}; });
     commandes = liste;
     majPastilleOng(liste.filter(function (o) { return mesLignes(o).length; }).length);
   } catch (e) { majPastilleOng(0); }
@@ -81,7 +105,8 @@ async function rendrePreparer() {
   const z = el('panneau');
   z.innerHTML = '<div class="sechead"><h2>À préparer</h2></div><p class="empty">…</p>';
   try {
-    commandes = await OPS.commandesAPreparer();
+    commandes = await OPS.colisAPreparer();
+    avancement = await OPS.avancementColis().catch(function () { return {}; });
   } catch (e) {
     z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
     return;
@@ -93,7 +118,7 @@ async function rendrePreparer() {
     '<div class="sechead"><h2>À préparer</h2><span class="eyebrow num">' +
       (miennes.length || '') + '</span></div>' +
     (miennes.length
-      ? '<div class="pile">' + miennes.map(carteCommande).join('') + '</div>'
+      ? '<div class="pile">' + miennes.map(carteColis).join('') + '</div>'
       : '<p class="empty">Aucune commande en attente. Elles apparaîtront ici ' +
         'dès qu’un agent aura confirmé l’appel au client.</p>');
 }
@@ -513,11 +538,19 @@ document.addEventListener('click', async function (ev) {
     await rendre();
     return;
   }
-  if (c.hasAttribute('data-avancer')) {
-    const id = c.getAttribute('data-avancer');
-    await agir(c, 'msg-' + id, function () {
-      return OPS.avancerCommande(id, c.getAttribute('data-vers'));
-    }, rendrePreparer);
+  // Le vendeur ne pilote pas le colis : il déclare SA part. Le colis
+  // ne passe « prêt » que lorsque tous les vendeurs de la ville ont
+  // fini, et ça se décide côté base, pas ici.
+  if (c.hasAttribute('data-pret')) {
+    const id = c.getAttribute('data-pret');
+    await agir(c, 'msg-' + id, function () { return OPS.maPartEstPrete(id); },
+      function (r) {
+        msg('msg-' + id, r.colis_pret
+          ? 'Votre part est remise et le colis est complet : Flashipping peut passer.'
+          : 'Votre part est remise. Le colis attend encore ' + r.restant +
+            ' article(s) d’autres vendeurs de la ville.', 'ok');
+        setTimeout(rendrePreparer, 1500);
+      });
     return;
   }
   if (c.hasAttribute('data-voir')) {
