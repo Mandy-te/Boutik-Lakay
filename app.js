@@ -15,6 +15,8 @@ const T = {
     sellHere:'Vendre sur Boutique Lakay',
     cart:'Panier', orders:'Mes commandes',
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
+    parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
+    shopsGrouped:'{n} vendeurs groupés',
     messages:'Mes messages',
     messagesNote:'Les avis sur vos commandes arrivent ici.',
     noMessages:'Aucun message pour le moment.',
@@ -85,6 +87,8 @@ const T = {
     sellHere:'Vann sou Boutique Lakay',
     cart:'Panyen', orders:'Kòmand mwen',
     ordersNote:'Swiv chak kòmand jiska retrè a.',
+    parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
+    shopsGrouped:'{n} machann ansanm',
     messages:'Mesaj mwen',
     messagesNote:'Avi sou kòmand ou yo rive la.',
     noMessages:'Pa gen mesaj pou kounye a.',
@@ -540,17 +544,21 @@ function rendreProduit() {
    meilleure façon de perdre un acheteur. */
 function totaux() {
   let sous = 0;
-  // Un frais par boutique, comme en base : chacune remet son colis.
+  // Un colis par ville d'origine, donc un frais par ville — même si
+  // trois vendeurs du Cap sont dans le même panier.
   const origines = [];
   panier.forEach(function (l) {
     sous += l.prix * l.quantite;
-    if (!origines.some(function (o) { return o.id === l.boutiqueId; })) {
-      origines.push({ id: l.boutiqueId, commune: l.boutiqueCommune });
+    // On compte les boutiques par leur identifiant, pas par leur nom :
+    // deux boutiques peuvent porter le même nom.
+    if (!origines.some(function (o) { return o.boutique === l.boutiqueId; })) {
+      origines.push({ boutique: l.boutiqueId, commune: l.boutiqueCommune });
     }
   });
   const pt = (cache.points || []).filter(function (p) { return p.id === pointChoisi; })[0];
-  const frais = pt ? API.calculerFrais(pt, origines, cache.tarifs) : 0;
-  return { sous: sous, frais: frais, total: sous + frais };
+  const colis = API.colisDuPanier(pt, origines, cache.tarifs);
+  const frais = colis.reduce(function (s, c) { return s + c.frais; }, 0);
+  return { sous: sous, frais: frais, total: sous + frais, colis: colis };
 }
 
 async function rendrePanier() {
@@ -682,8 +690,28 @@ async function rendrePanier() {
       : '<p class="note" style="color:var(--hot)">' + esc(t('noPoint')) + '</p>');
 
   const tt = totaux();
+
+  /* Le détail des colis n'apparaît que s'il y en a plusieurs. Avec un
+     seul, la ligne « Retrait » suffit ; avec trois, l'acheteur doit
+     voir d'où vient chaque frais, sinon il croit qu'on le surfacture. */
+  const detailColis = (tt.colis.length > 1)
+    ? '<div class="colisbloc">' +
+      '<div class="colistitre">' + esc(t('parcelsN').replace('{n}', tt.colis.length)) + '</div>' +
+      tt.colis.map(function (c, i) {
+        return '<div class="trow"><span>' +
+          esc(t('parcel') + ' ' + (i + 1) + ' · ' + c.commune) +
+          (c.boutiques.length > 1
+            ? '<em class="colisnote">' +
+              esc(t('shopsGrouped').replace('{n}', c.boutiques.length)) + '</em>'
+            : '') +
+          '</span><span class="num">' + htg(c.frais) + '</span></div>';
+      }).join('') +
+      '</div>'
+    : '';
+
   h += '<div style="height:14px"></div><div class="totals">' +
     '<div class="trow"><span>' + esc(t('sub')) + '</span><span class="num">' + htg(tt.sous) + '</span></div>' +
+    detailColis +
     '<div class="trow"><span>' + esc(t('fee')) + '</span><span class="num">' + htg(tt.frais) + '</span></div>' +
     '<div class="trow big"><span>' + esc(t('total')) + '</span><span class="num">' + htg(tt.total) + '</span></div>' +
     '<div class="trow"><span></span><span class="num">' + usd(tt.total) + '</span></div>' +

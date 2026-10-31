@@ -251,36 +251,43 @@ const API = (function () {
     });
   }
 
-  /* Même calcul que creer_commande() en base : UN frais par BOUTIQUE,
-     pas par commune. Deux boutiques de la même ville remettent deux
-     colis distincts, donc deux frais. La commune ne sert qu'à choisir
-     le tarif : tarif particulier pour le couple (point, commune
-     d'origine), sinon tarif de base du point.
+  /* Le frais de livraison paie un TRAJET, pas un vendeur.
 
-     `origines` est la liste des boutiques du panier, chacune sous la
-     forme { id, commune }. On dédoublonne sur l'identifiant de la
-     boutique, exactement comme la boucle v_boutiques en base. */
-  function calculerFrais(point, origines, lesTarifs) {
-    if (!point) return 0;
-    // La même clé que cle_lieu() côté serveur : sans ça le panier
-    // afficherait un frais et le comptoir en encaisserait un autre.
+     Les articles qui partent de la même ville sont emballés dans un
+     seul colis, même s'ils viennent de trois boutiques différentes :
+     un agent passe les ramasser, ils voyagent ensemble, c'est un seul
+     frais. Un panier qui prend du Cap, des Gonaïves et de Hinche fait
+     trois colis, donc trois frais qui s'additionnent.
+
+     Même règle que creer_commande() en base, à la clé près :
+     cle_lieu() y regroupe les graphies d'une même ville. */
+  function colisDuPanier(point, origines, lesTarifs) {
     const norm = (typeof cleLieu === 'function') ? cleLieu : function (x) {
       return String(x || '').trim().toLowerCase();
     };
-    const parBoutique = {};
+    const parVille = {};
     (origines || []).forEach(function (o) {
-      if (!o) return;
-      // Sans identifiant de boutique, la commune sert de clé : on
-      // préfère regrouper que de compter deux fois au hasard.
-      parBoutique[o.id || ('com:' + norm(o.commune))] = o.commune;
+      if (!o || !o.commune) return;
+      const c = norm(o.commune);
+      if (!parVille[c]) parVille[c] = { commune: o.commune, boutiques: [], frais: 0 };
+      if (parVille[c].boutiques.indexOf(o.boutique) === -1 && o.boutique) {
+        parVille[c].boutiques.push(o.boutique);
+      }
     });
-    return Object.keys(parBoutique).reduce(function (total, cle) {
-      const c = norm(parBoutique[cle]);
-      const t = (lesTarifs || []).filter(function (x) {
+    return Object.keys(parVille).sort().map(function (c) {
+      const colis = parVille[c];
+      const t = point && (lesTarifs || []).filter(function (x) {
         return x.point_retrait === point.id && norm(x.commune_origine) === c;
       })[0];
-      return total + (t ? Number(t.frais) : Number(point.frais || 25000));
-    }, 0);
+      colis.frais = point ? (t ? Number(t.frais) : Number(point.frais || 25000)) : 0;
+      return colis;
+    });
+  }
+
+  function calculerFrais(point, origines, lesTarifs) {
+    if (!point) return 0;
+    return colisDuPanier(point, origines, lesTarifs)
+      .reduce(function (total, c) { return total + c.frais; }, 0);
   }
 
   function parametres() {
@@ -479,7 +486,7 @@ const API = (function () {
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     regenererCode: regenererCode,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
-    tarifs: tarifs, calculerFrais: calculerFrais,
+    tarifs: tarifs, calculerFrais: calculerFrais, colisDuPanier: colisDuPanier,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,
     prixVariante: prixVariante, fourchette: fourchette, medias: medias,
     creerCommande: creerCommande, codeLocal: codeLocal,
