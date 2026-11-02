@@ -32,7 +32,7 @@ const CONFIG = {
      protéger.                                                        */
   captcha: {
     fournisseur: 'hcaptcha',   // doit correspondre au choix fait dans Supabase
-    cleSite: ''                // ex. '10000000-ffff-ffff-ffff-000000000001'
+    cleSite: 'b31e411c-e0f6-4e38-9b58-218611dca382'
   },
 
   /* --- Monnaie -------------------------------------------- */
