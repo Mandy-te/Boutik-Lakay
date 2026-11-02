@@ -18,6 +18,8 @@ const T = {
     parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
     shopsGrouped:'{n} vendeurs groupés',
     parcelOf:'Colis {n} sur {sur}',
+    roleAutre:'Vous êtes connecté avec un compte {role}, et vous naviguez ici comme client.',
+    versEspace:'Aller à mon espace de travail',
     removed:'Retiré — non facturé',
     parcelCancelled:'Colis annulé',
     codeParParcel:'Un code par colis : présentez celui du colis que vous venez chercher.',
@@ -94,6 +96,8 @@ const T = {
     parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
     shopsGrouped:'{n} machann ansanm',
     parcelOf:'Pake {n} sou {sur}',
+    roleAutre:'Ou konekte ak yon kont {role}, epi w ap navige la tankou kliyan.',
+    versEspace:'Ale nan espas travay mwen',
     removed:'Retire — nou pa fakti l',
     parcelCancelled:'Pake anile',
     codeParParcel:'Yon kòd pou chak pake : montre kòd pake w ap chèche a.',
@@ -185,6 +189,7 @@ let derniereCommande = null;
 let horsLigne = false, catalogueVieux = false;
 let envoiEnCours = false;
 let invite = true;        // session de passage tant qu'aucun compte n'est cree
+let roleCourant = null;   // 'acheteur', 'vendeur', 'agent' ou 'admin'
 let modeConnexion = false; // le panier montre le formulaire de connexion
 
 /* ---------- Utilitaires ----------------------------------- */
@@ -333,6 +338,14 @@ function majBandeau() {
   } else if (catalogueVieux) {
     txt.textContent = t('stale');
     b.classList.add('offline');
+    b.hidden = false;
+  } else if (roleCourant && roleCourant !== 'acheteur') {
+    /* Un compte d'équipe ou de vendeur qui fait ses courses ici : on
+       le dit. L'ambiguïté est le vrai danger — quelqu'un qui croit
+       être dans son espace de travail et qui commande, ou l'inverse.
+       Le dire coûte une ligne et lève le doute. */
+    txt.innerHTML = esc(t('roleAutre').replace('{role}', roleCourant)) +
+      ' <a href="gestion.html">' + esc(t('versEspace')) + '</a>';
     b.hidden = false;
   } else if (CONFIG.phase === 'pilote') {
     txt.textContent = t('payT') + ' · ' + t('zone') + ' : ' + CONFIG.zone;
@@ -1282,12 +1295,32 @@ document.addEventListener('click', function (ev) {
     }
 
     cible.disabled = true;
-    API.connecter(tel, pin).then(function () {
+    API.connecter(tel, pin).then(async function () {
       ecrireEssais(tel, null);       // compteur remis à zéro
       modeConnexion = false;
       invite = false;
+      roleCourant = null;
       cache.commandes = [];
       cache.messages = [];
+
+      /* Chacun chez soi. Un vendeur ou un agent qui se connecte ici
+         atterrissait dans la boutique, alors que son travail est
+         ailleurs. On l'envoie à sa porte d'entrée, qui le dirigera
+         vers son écran.
+
+         On ne REFUSE pas la connexion pour autant : un agent, un
+         vendeur, ce sont des gens du Cap qui achèteront aussi sur
+         Boutique Lakay. Leur fermer la boutique les pousserait à se
+         créer un second compte avec un autre numéro, et on perdrait
+         le lien entre les deux — historique, abandons, tout. La
+         séparation qui compte est ailleurs : la base refuse déjà
+         qu'on traite sa propre commande. */
+      const role = await API.monRole().catch(function () { return null; });
+      if (role && role !== 'acheteur') {
+        location.href = 'gestion.html';
+        return;
+      }
+
       aller(panier.length ? 'cart' : 'compte');
       compterNonLus();
     }).catch(function (e) {
@@ -1469,6 +1502,7 @@ async function assurerLib() {
   try {
     await API.session();
     invite = await API.estInvite();
+    roleCourant = invite ? null : await API.monRole().catch(function () { return null; });
     majEtatCompte();
   } catch (e) { /* hors ligne : on affiche le cache */ }
   await chargerReferentiels();

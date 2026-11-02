@@ -209,6 +209,13 @@ const API = (function () {
   }
 
   // Session de passage : l'acheteur navigue sans compte.
+  // Le rôle du compte connecté, ou null. Sert à envoyer chacun chez lui
+  // au lieu de le laisser atterrir dans la boutique par défaut.
+  async function monRole() {
+    const p = await profil();
+    return p ? p.role : null;
+  }
+
   async function estInvite() {
     const { data } = await sb().auth.getSession();
     if (!data || !data.session) return true;
@@ -625,6 +632,7 @@ const API = (function () {
     normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
     identifiantInterne: identifiantInterne,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
+    monRole: monRole,
     regenererCode: regenererCode, regenererCodeColis: regenererCodeColis,
     jetonCaptcha: jetonCaptcha, captchaActif: captchaActif,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,

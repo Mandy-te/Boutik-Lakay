@@ -134,6 +134,8 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:va
 
 .bandeau{background:var(--brand-soft);border-bottom:1px solid var(--line)}
 .bandrow{padding-block:8px;font-size:12px;font-weight:600;color:var(--ink)}
+/* Le lien vers l'espace de travail doit se voir dans le bandeau. */
+.bandrow a{color:var(--brand);text-decoration:underline;white-space:nowrap}
 .offline{background:color-mix(in srgb, var(--warn) 18%, transparent)}
 
 .search{display:flex;gap:8px;padding-block:10px 4px}
