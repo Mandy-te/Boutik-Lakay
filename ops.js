@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — fonctions réservées à l'équipe
+   Konbit Market — fonctions réservées à l'équipe
 
    Fichier séparé exprès : il n'est chargé que par gestion.html.
    Un acheteur ne télécharge pas ce code — la data mobile coûte

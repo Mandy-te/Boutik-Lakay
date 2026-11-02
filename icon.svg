@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Boutique Lakay">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Konbit Market">
   <rect width="512" height="512" rx="104" fill="#1B2FA0"/>
-  <!-- Toit : le "lakay", la maison. L'auvent d'une boutique de quartier. -->
+  <!-- Toit : l'auvent d'une boutique de quartier. Le konbit se fait sous un toit partagé. -->
   <path d="M96 196 L256 96 L416 196 Z" fill="#C8102E"/>
   <!-- Comptoir et devanture -->
   <rect x="128" y="212" width="256" height="188" rx="24" fill="#FFFFFF"/>

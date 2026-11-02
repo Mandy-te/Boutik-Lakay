@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — inscription d'un vendeur
+   Konbit Market — inscription d'un vendeur
 
    Un vendeur s'inscrit seul, depuis son téléphone. Il crée son
    compte, déclare sa boutique, dépose ses pièces. Rien n'est

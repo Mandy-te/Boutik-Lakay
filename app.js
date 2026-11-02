@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — interface
+   Konbit Market — interface
 
    Aucune requête Supabase ici : tout passe par API (api.js).
    Aucun texte en dur dans les vues : tout passe par t() (T ci-dessous),
@@ -12,7 +12,7 @@ const T = {
   fr: {
     search:'Chercher un article', boost:'Mises en avant', all:'Tous les articles',
     shops:'Boutiques', shopsNote:'Grand Nord. Chaque vendeur est vérifié avant publication.',
-    sellHere:'Vendre sur Boutique Lakay',
+    sellHere:'Vendre sur Konbit Market',
     cart:'Panier', orders:'Mes commandes',
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
     parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
@@ -90,7 +90,7 @@ const T = {
   ht: {
     search:'Chèche yon atik', boost:'Mete devan', all:'Tout atik yo',
     shops:'Boutik', shopsNote:'Gran Nò. Chak machann verifye anvan nou pibliye.',
-    sellHere:'Vann sou Boutique Lakay',
+    sellHere:'Vann sou Konbit Market',
     cart:'Panyen', orders:'Kòmand mwen',
     ordersNote:'Swiv chak kòmand jiska retrè a.',
     parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
@@ -1310,7 +1310,7 @@ document.addEventListener('click', function (ev) {
 
          On ne REFUSE pas la connexion pour autant : un agent, un
          vendeur, ce sont des gens du Cap qui achèteront aussi sur
-         Boutique Lakay. Leur fermer la boutique les pousserait à se
+         Konbit Market. Leur fermer la boutique les pousserait à se
          créer un second compte avec un autre numéro, et on perdrait
          le lien entre les deux — historique, abandons, tout. La
          séparation qui compte est ailleurs : la base refuse déjà

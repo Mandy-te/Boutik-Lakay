@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — déclinaisons d'un produit
+   Konbit Market — déclinaisons d'un produit
 
    Partagé par l'espace vendeur et l'administration : les deux
    éditent les mêmes fiches, ils ne doivent pas avoir deux

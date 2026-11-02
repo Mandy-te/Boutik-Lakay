@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — le comptoir, partagé
+   Konbit Market — le comptoir, partagé
 
    L'agent et l'administrateur font exactement le même geste sur un
    colis : appeler le client, l'embarquer avec son numéro de suivi,

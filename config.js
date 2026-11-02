@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — configuration
+   Konbit Market — configuration
    Le seul fichier à modifier quand quelque chose change dehors.
    ============================================================ */
 

@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — comptoir
+   Konbit Market — comptoir
 
    L'écran d'un agent debout derrière un comptoir, un téléphone
    dans une main. Une commande, une action possible, pas de menu

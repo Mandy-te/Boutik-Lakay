@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — moyens de paiement
+   Konbit Market — moyens de paiement
 
    Pourquoi ce fichier existe séparément : brancher MonCash ou NatCash
    plus tard ne doit toucher ni la base, ni l'interface, ni le panier.
@@ -33,7 +33,7 @@ const PAIEMENTS = {
   /* ---------------------------------------------------------
      FERMÉ — en attente de l'enregistrement de la société
 
-     Ne pas ouvrir ces moyens avant que Boutique Lakay existe
+     Ne pas ouvrir ces moyens avant que Konbit Market existe
      légalement et dispose d'un compte MARCHAND (pas un compte
      agent : le float d'un compte agent n'est pas un séquestre,
      et s'en servir met en danger le compte lui-même).

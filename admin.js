@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — administration
+   Konbit Market — administration
 
    L'accès complet : boutiques, catalogue, catégories, livraison,
    règlements, comptes. C'est ici que se décident les choses qui

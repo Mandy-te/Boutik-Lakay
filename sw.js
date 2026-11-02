@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — service worker
+   Konbit Market — service worker
 
    Deux raisons d'exister, dans cet ordre :
    1. La data mobile coûte cher en Haïti. Le squelette de l'app ne
@@ -17,7 +17,7 @@
 // À incrémenter à chaque mise en ligne : c'est ce numéro qui purge
 // l'ancien cache. Sans ça, un correctif reste invisible sur les
 // téléphones qui ont déjà ouvert l'app une fois.
-const VERSION = 'bl-v3.14.0';
+const VERSION = 'km-v4.0.0';
 
 const SQUELETTE = [
   './',

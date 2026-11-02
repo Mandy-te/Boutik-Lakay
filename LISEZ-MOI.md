@@ -1,4 +1,4 @@
-# Boutique Lakay — version 1
+# Konbit Market — version 1
 
 Web app autonome, sans étape de compilation. Modifiable depuis un téléphone,
 déployable sur GitHub Pages, et emballable plus tard en application Android /
@@ -83,7 +83,7 @@ voyant exactement ce qu'il voit.
 **Espace vendeur** — ses commandes à préparer, et deux étapes qu'il est le seul
 à pouvoir déclarer : « je prépare » et « c'est prêt ». Il ajuste ses stocks et
 corrige ses descriptions. Il ne publie pas lui-même et ne fixe pas les prix :
-la qualité des photos décide des ventes. Il voit ce que Boutique Lakay lui doit,
+la qualité des photos décide des ventes. Il voit ce que Konbit Market lui doit,
 commande par commande.
 
 **Comptoir** — les commandes qui attendent un geste, rangées par urgence : le
@@ -98,7 +98,7 @@ points de retrait et tarifs, règlements des vendeurs, comptes et rôles.
 ### Le lien à envoyer à un vendeur
 
 **`devenir-vendeur.html`** — par exemple
-`https://mandy-te.github.io/Boutik-Lakay/devenir-vendeur.html`
+`https://konbitmarket.com/devenir-vendeur.html`
 
 Le vendeur s'inscrit seul depuis son téléphone : son nom, son numéro, un code
 secret à 6 chiffres, puis sa boutique et ses pièces. Rien n'est visible des
@@ -134,13 +134,57 @@ Trop lourd de conséquences pour un seul appui sur un téléphone tenu à une ma
 
 ## Mise en ligne sur GitHub Pages
 
-1. Crée un dépôt, par exemple `boutique-lakay`.
+1. Crée un dépôt, par exemple `konbit-market`.
 2. Dépose tous les fichiers de ce dossier **à la racine** du dépôt.
 3. **Settings → Pages → Source : `main` / `/ (root)`**.
-4. L'app est en ligne sur `https://<ton-compte>.github.io/boutique-lakay/`.
+4. L'app est en ligne sur `https://<ton-compte>.github.io/<dépôt>/`.
 
 Il faut du HTTPS pour que l'installation sur l'écran d'accueil et le mode
 hors-ligne fonctionnent. GitHub Pages le fournit.
+
+### Le nom de domaine
+
+Le site répond sur **`konbitmarket.com`**. Trois pièces, et il faut les trois :
+
+**1. Le fichier `CNAME`** à la racine du dépôt contient une seule ligne,
+`konbitmarket.com`. C'est lui qui dit à GitHub quel domaine servir. Ne le
+supprime jamais : sans lui le domaine se détache tout seul à la prochaine
+mise en ligne.
+
+**2. Les enregistrements DNS** chez le registraire (Porkbun) :
+
+| Type | Hôte | Valeur |
+|---|---|---|
+| A | (vide) | `185.199.108.153` |
+| A | (vide) | `185.199.109.153` |
+| A | (vide) | `185.199.110.153` |
+| A | (vide) | `185.199.111.153` |
+| AAAA | (vide) | `2606:50c0:8000::153` |
+| AAAA | (vide) | `2606:50c0:8001::153` |
+| AAAA | (vide) | `2606:50c0:8002::153` |
+| AAAA | (vide) | `2606:50c0:8003::153` |
+| CNAME | `www` | `mandy-te.github.io` |
+
+Les quatre A sont les quatre machines de GitHub : si une tombe, le navigateur
+essaie la suivante. Les AAAA sont les mêmes en IPv6 — beaucoup de téléphones
+en 4G passent par là, les mettre coûte une minute et évite un site injoignable
+pour une partie des visiteurs.
+
+**3. `Settings → Pages → Enforce HTTPS`**, à cocher une fois que GitHub a fini
+de délivrer le certificat (quelques minutes à une heure après la propagation).
+
+### Le domaine interne `lakay.local` — à ne pas toucher
+
+L'ancien nom survit à un endroit, volontairement. Un acheteur s'inscrit avec
+son numéro de téléphone, pas avec un e-mail ; `api.js` lui fabrique un
+identifiant interne `50931324336@lakay.local`. Cette adresse n'existe pas,
+n'est jamais affichée, n'est jamais tapée — elle est calculée à partir du
+numéro à chaque connexion.
+
+Changer cette chaîne dans `api.js` couperait la connexion de tous les comptes
+déjà créés : l'application chercherait `…@konbitmarket.local` alors que la
+base contient `…@lakay.local`. C'est une migration de comptes, pas un
+renommage. Tant qu'il n'y a pas une vraie raison, on laisse.
 
 ---
 

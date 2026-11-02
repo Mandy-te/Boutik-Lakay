@@ -1,10 +1,10 @@
 /* ============================================================
-   Boutique Lakay — espace vendeur
+   Konbit Market — espace vendeur
 
    Ce que le vendeur fait, et rien d'autre :
    · préparer les commandes qui le concernent et dire quand c'est prêt
    · tenir son catalogue (brouillons, stock, photos)
-   · voir ce que Boutique Lakay lui doit
+   · voir ce que Konbit Market lui doit
 
    Ce qu'il ne peut pas faire, et c'est voulu :
    · publier lui-même — la qualité des photos décide des ventes
@@ -162,8 +162,8 @@ function blocPieces() {
       mesPieces.patente && mesPieces.patente.chemin, 'msgPatente') +
     '<p class="note">' + (deux
       ? 'Vos deux pièces sont arrivées. Un agent les vérifie et vous appelle. ' +
-        'Elles restent privées : seule l\u2019équipe de Boutique Lakay peut les consulter.'
-      : 'Elles restent privées : seule l\u2019équipe de Boutique Lakay peut les consulter.') +
+        'Elles restent privées : seule l\u2019équipe de Konbit Market peut les consulter.'
+      : 'Elles restent privées : seule l\u2019équipe de Konbit Market peut les consulter.') +
     '</p>';
 }
 
@@ -238,7 +238,7 @@ function blocMedias(p) {
      modifier une fiche qu'un agent est en train de relire lui ferait
      valider autre chose que ce qu'il a sous les yeux.
    · les PRIX, seulement tant que la fiche est en brouillon. Ensuite
-     ils passent par Boutique Lakay, comme la publication.          */
+     ils passent par Konbit Market, comme la publication.          */
 function blocVariantes(p) {
   const enRevision = p.statut === 'en_revision';
   const prixFige = enRevision || p.statut === 'publie';
@@ -268,7 +268,7 @@ function blocVariantes(p) {
   const stocks = (vs.length
     ? '<div class="sechead"><h2 style="font-size:13px">Stock par variante</h2></div>' + lignes +
       (prixFige ? '<p class="note">Les prix se modifient quand la fiche est en ' +
-        'brouillon, ou par Boutique Lakay.</p>' : '')
+        'brouillon, ou par Konbit Market.</p>' : '')
     : '');
 
   // Une fiche sans aucune variante ne peut rien vendre : il faut
@@ -335,7 +335,7 @@ function carteProduit(p) {
       : '') +
     (p.statut === 'en_revision'
       ? '<p class="note">Soumise le ' + esc(quand(p.soumis_le)) + '. ' +
-        'Boutique Lakay vérifie les photos, le texte et les variantes.</p>'
+        'Konbit Market vérifie les photos, le texte et les variantes.</p>'
       : '') +
 
     (enEdition ? formProduit(p) :
@@ -353,7 +353,7 @@ function carteProduit(p) {
     '<div id="msg-' + esc(p.id) + '"></div>' +
     (modifiable
       ? '<button class="cta" data-soumettre="' + esc(p.id) + '">' +
-        (p.statut === 'refuse' ? 'Soumettre à nouveau' : 'Soumettre à Boutique Lakay') +
+        (p.statut === 'refuse' ? 'Soumettre à nouveau' : 'Soumettre à Konbit Market') +
         '</button>' +
         '<div class="danger"><button class="ghost" data-supprod="' + esc(p.id) +
           '">Supprimer cet article</button></div>'
@@ -402,7 +402,7 @@ async function rendreCatalogue() {
         '<div id="newProdErr"></div>' +
         '<button class="cta" id="creerProduit">Créer le brouillon</button>' +
         '<p class="note">Vous ajouterez ensuite les photos et les variantes, ' +
-          'puis vous soumettrez la fiche. Boutique Lakay vérifie avant la vitrine.</p>' +
+          'puis vous soumettrez la fiche. Konbit Market vérifie avant la vitrine.</p>' +
       '</div>' +
     '</div>' +
     '<div class="pile" id="listeProduits">' +
@@ -509,7 +509,7 @@ function bandeauBoutique() {
       '<div class="titreligne"><h2>' + esc(boutique.nom) + '</h2>' +
       '<span class="pill ko">Suspendue</span></div>' +
       '<p class="note">Vos articles sont retirés de la vitrine. ' +
-      'Contactez Boutique Lakay.</p></div>';
+      'Contactez Konbit Market.</p></div>';
   }
   return '';
 }
@@ -645,7 +645,7 @@ document.addEventListener('click', async function (ev) {
     const id = c.getAttribute('data-soumettre');
     await agir(c, 'msg-' + id, function () { return OPS.soumettreProduit(id); },
       async function () {
-        msg('msg-' + id, 'Envoyée. Boutique Lakay vérifie et vous répond.', 'ok');
+        msg('msg-' + id, 'Envoyée. Konbit Market vérifie et vous répond.', 'ok');
         setTimeout(rechargerProduits, 1200);
       });
     return;

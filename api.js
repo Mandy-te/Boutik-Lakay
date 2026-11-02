@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — couche de données
+   Konbit Market — couche de données
 
    Tout accès à la base passe par ici. Aucune requête Supabase
    ailleurs dans l'app. Raison : le jour où cette web app devient

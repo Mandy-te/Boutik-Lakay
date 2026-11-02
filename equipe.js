@@ -1,5 +1,5 @@
 /* ============================================================
-   Boutique Lakay — socle commun aux écrans d'équipe
+   Konbit Market — socle commun aux écrans d'équipe
 
    Les trois écrans (vendeur, agent, administration) partagent la
    connexion, le contrôle du rôle, et les mêmes petits outils
