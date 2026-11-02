@@ -151,6 +151,13 @@ const EQUIPE = (function () {
     });
     const s = el('sortir');
     if (s) s.hidden = (vue !== 'app');
+    /* Le retour vers la boutique. Un vendeur ou un agent arrive ici
+       directement depuis la connexion ; sans ce lien il n'a aucun
+       chemin pour aller acheter, et c'est exactement ce qui pousse
+       quelqu'un à se créer un second compte. Le passage d'un rôle à
+       l'autre doit être volontaire et visible, dans les deux sens. */
+    Array.prototype.forEach.call(document.querySelectorAll('.versBoutique'),
+      function (a) { a.hidden = (vue !== 'app'); });
   }
 
   function nomRole(r) {

@@ -104,7 +104,10 @@ async function router() {
     return '<a class="bloc" href="' + e.url + '" style="text-decoration:none;color:inherit">' +
       '<div class="titreligne"><h2>' + e.nom + '</h2></div>' +
       '<p class="note">' + e.quoi + '</p></a>';
-  }).join('');
+  }).join('') +
+    // Travailler ici ne doit pas empêcher d'acheter là-bas.
+    '<p class="note">Vous voulez acheter ? ' +
+    '<a href="index.html">Aller à la boutique comme client.</a></p>';
   montrerVue('choix');
 }
 
