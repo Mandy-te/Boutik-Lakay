@@ -690,10 +690,17 @@ const OPS = (function () {
     return data.signedUrl;
   }
 
+  /* Transférer une boutique à son vrai propriétaire. Passe par une
+     fonction en base plutôt que par une mise à jour directe, parce
+     que deux gestes vont ensemble : changer le propriétaire ET lui
+     donner le rôle vendeur s'il ne l'avait pas. Séparés, on hérite
+     d'une boutique qu'on ne peut pas ouvrir. */
   async function transfererBoutique(boutiqueId, profilId) {
-    const { error } = await sb().from('boutiques')
-      .update({ proprietaire: profilId }).eq('id', boutiqueId);
+    const { data, error } = await sb().rpc('transferer_boutique', {
+      p_boutique: boutiqueId, p_profil: profilId
+    });
     if (error) throw error;
+    return data;
   }
 
   async function definirRole(profilId, role) {

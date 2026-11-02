@@ -45,12 +45,19 @@
     <div class="ligne"><span>Fournisseur</span><strong id="fournisseur">—</strong></div>
   </div>
 
-  <button id="tester">Tester maintenant</button>
+  <button id="tester">1. hCaptcha répond-il sur ce domaine ?</button>
   <div id="verdict"></div>
+
+  <button id="exige" style="margin-top:14px">2. Supabase exige-t-il le captcha ?</button>
+  <div id="verdict2"></div>
+  <p class="quoi">Le second test tente une connexion volontairement fausse,
+    SANS jeton. Il ne crée rien et ne connecte personne : c'est la réponse
+    d'erreur de Supabase qui nous dit s'il réclame un captcha ou non.</p>
 
   <p class="quoi">À garder : le jour où la boutique passera sur son propre nom de
     domaine, il faudra ajouter ce domaine dans hCaptcha. Cette page le dira en
-    quelques secondes.</p>
+    quelques secondes. Et rappel : le captcha est en mode <em>invisible</em> —
+    ne rien voir à la connexion est le fonctionnement normal, pas une panne.</p>
 
 </div>
 
@@ -148,6 +155,62 @@ el('tester').addEventListener('click', async function () {
       'Vérifiez aussi que la clé affichée plus haut est bien celle de ce ' +
       'site-là. Message technique : <code>' +
       String(e && e.message ? e.message : e) + '</code>');
+  }
+  b.disabled = false;
+  b.textContent = 'Retester';
+});
+
+/* Deuxième test : est-ce que Supabase RÉCLAME un jeton ?
+
+   On tente une connexion avec une adresse qui n'existe pas et sans
+   jeton. Rien n'est créé, personne n'est connecté. Seule la réponse
+   d'erreur nous intéresse :
+
+   - « identifiants invalides » → le captcha n'est pas exigé. Le
+     secret n'est pas enregistré côté Supabase, ou la protection est
+     restée éteinte ;
+   - une erreur qui parle de captcha → la protection est bien active,
+     et c'est l'application qui fournit le jeton au quotidien. */
+function dire2(classe, titre, texte) {
+  document.getElementById('verdict2').innerHTML =
+    '<div class="verdict ' + classe + '"><strong>' + titre + '</strong>' + texte + '</div>';
+}
+
+document.getElementById('exige').addEventListener('click', async function () {
+  const b = this;
+  b.disabled = true;
+  b.textContent = 'Test en cours…';
+  dire2('attente', 'Patientez', 'Une connexion volontairement fausse est envoyée.');
+
+  try {
+    const rep = await fetch(CONFIG.supabaseUrl + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'apikey': CONFIG.supabaseKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'test-captcha-' + Date.now() + '@lakay.local',
+        password: 'xxxxxx'
+      })
+    });
+    const texte = await rep.text();
+    const parleDeCaptcha = /captcha/i.test(texte);
+
+    if (parleDeCaptcha) {
+      dire2('vrai', 'La protection est ACTIVE',
+        'Supabase a refusé une tentative sans jeton. Le captcha est donc bien ' +
+        'exigé, et c\u2019est l\u2019application qui fournit le jeton silencieusement ' +
+        '\u00e0 chaque connexion. Rien \u00e0 voir \u00e0 l\u2019\u00e9cran : c\u2019est voulu.<br><br>' +
+        '<code>' + texte.slice(0, 160) + '</code>');
+    } else {
+      dire2('faux', 'La protection n\u2019est PAS active',
+        'Supabase a r\u00e9pondu sans parler de captcha : il accepte donc les ' +
+        'tentatives sans jeton. Le secret n\u2019est probablement pas enregistr\u00e9, ' +
+        'ou l\u2019interrupteur est rest\u00e9 \u00e9teint. Retourne dans Authentication, ' +
+        'Attack Protection, colle le secret hCaptcha et appuie sur ' +
+        '<em>Save changes</em>.<br><br><code>' + texte.slice(0, 160) + '</code>');
+    }
+  } catch (e) {
+    dire2('faux', 'Test impossible',
+      'La requ\u00eate n\u2019a pas abouti : ' + String(e && e.message ? e.message : e));
   }
   b.disabled = false;
   b.textContent = 'Retester';

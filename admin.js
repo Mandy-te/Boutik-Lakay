@@ -356,6 +356,23 @@ function carteBoutique(b) {
       '</div>';
     })() +
 
+    /* Le propriétaire se change ICI, là où on lit l'avertissement.
+       Avant, il fallait deviner : aller dans Comptes, donner le rôle
+       vendeur à quelqu'un, et seulement alors une liste apparaissait.
+       Un avertissement qui dit quoi faire sans donner le moyen de le
+       faire n'est pas un avertissement, c'est un reproche. */
+    '<div class="champ"><label for="prop-' + esc(b.id) + '">Propriétaire</label>' +
+      '<select id="prop-' + esc(b.id) + '">' +
+        comptes.map(function (p) {
+          return '<option value="' + esc(p.id) + '"' +
+            (b.proprietaire === p.id ? ' selected' : '') + '>' +
+            esc(p.nom || 'Sans nom') +
+            (p.telephone ? ' · ' + esc(p.telephone) : '') +
+            ' · ' + esc(p.role) + '</option>';
+        }).join('') + '</select></div>' +
+    '<button class="mini" data-transferer="' + esc(b.id) + '">' +
+      'Transférer à ce compte</button>' +
+
     '<div id="msg-' + esc(b.id) + '"></div>' +
     '<div class="rangee">' +
       (st !== 'verifiee' ? '<button class="mini" data-verifier="' + esc(b.id) + '">' +
@@ -1772,6 +1789,24 @@ document.addEventListener('click', async function (ev) {
         if (ficheBoutique === b) rendreFicheBoutique(); else rendreReglements();
       }, 1500);
     });
+    return;
+  }
+
+  if (c.hasAttribute('data-transferer')) {
+    const id = c.getAttribute('data-transferer');
+    const sel = el('prop-' + id);
+    const vers = sel ? sel.value : '';
+    if (!vers) { msg('msg-' + id, 'Choisis un compte.', 'ko'); return; }
+    await agir(c, 'msg-' + id, function () { return OPS.transfererBoutique(id, vers); },
+      async function (r) {
+        msg('msg-' + id,
+          r.boutique + ' appartient maintenant à ce compte.' +
+          (r.promu ? ' Il est passé acheteur → vendeur, sans quoi il n’aurait pas pu ouvrir son espace.' : '') +
+          (r.equipe ? ' Attention : c’est un compte d’équipe, le problème reste entier.' : ''),
+          r.equipe ? 'ko' : 'ok');
+        await rechargerBase();
+        setTimeout(rendre, 1800);
+      });
     return;
   }
 
