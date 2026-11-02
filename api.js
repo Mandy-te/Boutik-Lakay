@@ -235,11 +235,15 @@ const API = (function () {
     const jeton = await jetonCaptcha();
 
     if (anonyme) {
-      // La promotion d'une session de passage ne passe pas par le
-      // captcha : l'appelant est déjà authentifié.
+      /* Promotion d'une session de passage en vrai compte. On joint le
+         jeton par precaution : si Supabase traite ce chemin comme une
+         inscription, il l'exigera ; s'il l'ignore, ca ne coute rien.
+         Ne concerne que les navigateurs ouverts avant la suppression
+         des sessions anonymes — mais autant qu'ils ne restent pas
+         coinces. */
       const { error } = await sb().auth.updateUser({
         email: ident, password: String(champs.pin)
-      });
+      }, { captchaToken: jeton });
       if (error) {
         if (String(error.message).toLowerCase().indexOf('already') !== -1) {
           throw new Error('Ce numéro a déjà un compte. Connectez-vous.');
