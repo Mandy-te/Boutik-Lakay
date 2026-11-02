@@ -431,23 +431,50 @@ Conséquence : **l'interrupteur « Anonymous sign-ins » peut être désactivé*
 qui ont déjà une session anonyme continuent de fonctionner et la transforment
 en vrai compte à l'inscription, comme avant.
 
-### Trois interrupteurs à activer
+### Le CAPTCHA : l'ordre compte, sinon tout le monde est dehors
 
-Tous gratuits, tous dans le tableau de bord Supabase :
+C'est la seule vraie protection contre la force brute disponible sur l'offre
+gratuite, et le code est prêt. Mais l'ordre des trois étapes n'est pas
+négociable :
 
-- **CAPTCHA** (Authentication → Attack Protection) : la vraie réponse à la
-  force brute sur l'offre gratuite. Créer un widget Cloudflare Turnstile,
-  coller la clé secrète ici, puis câbler la clé publique dans les écrans de
-  connexion. C'est la seule des trois qui demande du code.
-- **Leaked password protection** (Authentication → Policies) : refuse les mots
-  de passe déjà vus dans des fuites connues. Le contrôleur de Supabase le
-  signale comme désactivé. Un clic.
-- **MFA / TOTP** (Authentication → Multi-Factor) pour les comptes d'équipe :
-  une seconde preuve en plus du mot de passe. C'est la meilleure protection
-  disponible pour les comptes qui ouvrent la caisse.
+1. créer le site sur **hCaptcha** — le fournisseur doit correspondre à celui
+   choisi dans Supabase — et noter la **clé de site** et le **secret** ;
+2. coller la **clé de site** dans `config.js`, puis **mettre en ligne** ;
+3. seulement après, coller le **secret** dans Supabase (Authentication →
+   Attack Protection) et activer.
 
-Et un quatrième à **désactiver** : *Anonymous sign-ins*, devenu inutile (voir
-plus haut).
+Dans l'autre sens, Supabase réclame un jeton que l'application en ligne
+n'envoie pas encore : plus personne ne se connecte ni ne s'inscrit, le temps
+du déploiement.
+
+Tant que `cleSite` est vide, ce code ne fait rien : aucune librairie chargée,
+aucun octet de données mobiles dépensé. Le captcha ne se déclenche qu'à
+l'inscription et à la connexion, jamais sur le catalogue — c'est précisément
+pour ça que la session anonyme a été supprimée.
+
+### Ce qui est réservé aux plans payants, contrairement à ce qu'on croit
+
+Deux protections paraissent disponibles et ne le sont pas sur l'offre gratuite.
+Le tableau de bord laisse actionner l'interrupteur, et refuse à
+l'enregistrement :
+
+- **Password Verification Attempt hook** — Team et Enterprise. La fonction
+  `hook_verification_mot_de_passe` est écrite et testée, dormante en attendant.
+- **Prevent use of leaked passwords** (HaveIBeenPwned) — Pro et au-dessus.
+
+Ce qui reste gratuit et réel : le CAPTCHA, les **limites de requêtes**
+(Authentication → Rate Limits, à ne pas serrer trop fort : les opérateurs
+haïtiens font passer des milliers d'abonnés derrière quelques adresses IP), et
+**MFA / TOTP** (Authentication → Multi-Factor) pour les comptes d'équipe.
+
+Un piège à connaître dans ces mêmes réglages : **« Minimum password length »
+doit rester à 6**. C'est la longueur exacte du code secret des acheteurs. Le
+monter à 8 ferait échouer toutes les inscriptions, sans message
+compréhensible. Rien n'empêche en revanche un compte d'équipe d'avoir un mot
+de passe beaucoup plus long : c'est un plancher, pas un plafond.
+
+Et un interrupteur à **désactiver** : *Anonymous sign-ins*, devenu inutile
+(voir plus haut).
 
 ### Les comptes d'équipe ne devraient pas tenir sur six chiffres
 

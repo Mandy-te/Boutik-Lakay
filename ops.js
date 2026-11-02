@@ -30,7 +30,8 @@ const OPS = (function () {
     const courriel = API.telValide(id) ? API.identifiantInterne(id) : id;
     try { await sb().auth.signOut(); } catch (e) {}
     const { data, error } = await sb().auth.signInWithPassword({
-      email: courriel, password: motdepasse
+      email: courriel, password: motdepasse,
+      options: { captchaToken: await API.jetonCaptcha() }
     });
     if (error) throw new Error('Identifiant ou mot de passe incorrect.');
     return data.user;

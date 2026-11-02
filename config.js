@@ -9,6 +9,32 @@ const CONFIG = {
   supabaseUrl: 'https://xpiklpznggsrfsxmittr.supabase.co',
   supabaseKey: 'sb_publishable_OUJkIiz304t-fcwxRDncnA_QjtW0Dyz',
 
+  /* --- Vérification anti-robot ----------------------------
+
+     Supabase peut exiger un jeton de captcha sur l'inscription et la
+     connexion : tableau de bord, Authentication, Attack Protection.
+     C'est la vraie protection contre la force brute sur un code à six
+     chiffres, et elle est disponible sur l'offre gratuite.
+
+     ORDRE À RESPECTER, sinon tout le monde est dehors :
+
+       1. créer le site sur hCaptcha, noter la clé de site ET le secret ;
+       2. coller la CLÉ DE SITE ci-dessous, et mettre en ligne ;
+       3. SEULEMENT APRÈS, coller le SECRET côté Supabase et activer.
+
+     L'inverse coupe toutes les connexions pendant le temps du
+     déploiement : Supabase réclamerait un jeton que l'application
+     n'envoie pas encore.
+
+     Tant que cleSite est vide, rien ne change : aucune librairie n'est
+     chargée, aucun jeton n'est envoyé, et un visiteur qui regarde le
+     catalogue ne paie rien — il n'y a plus de session anonyme à
+     protéger.                                                        */
+  captcha: {
+    fournisseur: 'hcaptcha',   // doit correspondre au choix fait dans Supabase
+    cleSite: ''                // ex. '10000000-ffff-ffff-ffff-000000000001'
+  },
+
   /* --- Monnaie -------------------------------------------- */
   // Les prix sont en CENTIMES de gourde partout dans le code et en base.
   // 2 450,00 HTG = 245000. Jamais de décimales, jamais de float sur l'argent.

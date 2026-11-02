@@ -93,6 +93,78 @@ const API = (function () {
      un article. Sur une connexion mobile haïtienne, c'est rédhibitoire.
 
      Désormais la fonction constate, elle ne crée rien. */
+  /* ---------- Vérification anti-robot ----------------------
+
+     Un code à six chiffres, c'est un million de combinaisons : la
+     seule défense réelle contre un automate, sur l'offre gratuite de
+     Supabase, c'est le captcha. Il ne s'applique qu'aux moments
+     d'authentification — s'inscrire, se connecter — jamais à la
+     consultation du catalogue, puisqu'une visite ne crée plus de
+     compte.
+
+     Tant que CONFIG.captcha.cleSite est vide, ce code ne fait RIEN :
+     aucune librairie chargée, aucun jeton, aucun octet de données
+     mobiles dépensé. Il s'allume le jour où la clé est renseignée.  */
+
+  let captchaCharge = null;     // la promesse de chargement, une seule fois
+  let captchaWidget = null;     // l'identifiant du widget invisible
+
+  function captchaActif() {
+    return !!(CONFIG.captcha && CONFIG.captcha.cleSite);
+  }
+
+  function chargerCaptcha() {
+    if (captchaCharge) return captchaCharge;
+    captchaCharge = new Promise(function (resolve, reject) {
+      if (window.hcaptcha) { resolve(window.hcaptcha); return; }
+      // hCaptcha appelle cette fonction globale quand il est prêt.
+      window.blCaptchaPret = function () { resolve(window.hcaptcha); };
+      const sc = document.createElement('script');
+      sc.src = 'https://js.hcaptcha.com/1/api.js?render=explicit&onload=blCaptchaPret';
+      sc.async = true;
+      sc.defer = true;
+      sc.onerror = function () { reject(new Error('captcha indisponible')); };
+      document.head.appendChild(sc);
+      // Sur une connexion lente, mieux vaut un message clair qu'une
+      // attente sans fin devant un bouton qui ne répond pas.
+      setTimeout(function () { reject(new Error('captcha trop lent')); }, 20000);
+    });
+    return captchaCharge;
+  }
+
+  async function jetonCaptcha() {
+    if (!captchaActif()) return undefined;
+    let api;
+    try {
+      api = await chargerCaptcha();
+    } catch (e) {
+      captchaCharge = null;   // on réessaiera au prochain coup
+      throw new Error('La vérification anti-robot n’a pas pu se charger. ' +
+        'Vérifiez votre connexion et réessayez.');
+    }
+    if (captchaWidget === null) {
+      const boite = document.createElement('div');
+      boite.id = 'bl-captcha';
+      boite.style.display = 'none';
+      document.body.appendChild(boite);
+      captchaWidget = api.render(boite, {
+        sitekey: CONFIG.captcha.cleSite,
+        size: 'invisible'
+      });
+    }
+    let r;
+    try {
+      r = await api.execute(captchaWidget, { async: true });
+    } catch (e) {
+      api.reset(captchaWidget);
+      throw new Error('Vérification anti-robot échouée. Réessayez.');
+    }
+    // Un jeton ne sert qu'une fois : sans ce reset, la deuxième
+    // tentative serait refusée par Supabase sans explication.
+    api.reset(captchaWidget);
+    return r && r.response;
+  }
+
   async function session() {
     const { data } = await sb().auth.getSession();
     return (data && data.session) ? data.session : null;
@@ -160,7 +232,11 @@ const API = (function () {
     const { data: s } = await sb().auth.getSession();
     const anonyme = s && s.session && s.session.user.is_anonymous;
 
+    const jeton = await jetonCaptcha();
+
     if (anonyme) {
+      // La promotion d'une session de passage ne passe pas par le
+      // captcha : l'appelant est déjà authentifié.
       const { error } = await sb().auth.updateUser({
         email: ident, password: String(champs.pin)
       });
@@ -179,7 +255,8 @@ const API = (function () {
       }
     } else {
       const { data: inscrit, error } = await sb().auth.signUp({
-        email: ident, password: String(champs.pin)
+        email: ident, password: String(champs.pin),
+        options: { captchaToken: jeton }
       });
       if (error) {
         if (String(error.message).toLowerCase().indexOf('already') !== -1) {
@@ -208,7 +285,8 @@ const API = (function () {
   async function connecter(tel, pin) {
     if (!telValide(tel)) throw new Error('Numéro invalide.');
     const { error } = await sb().auth.signInWithPassword({
-      email: identifiantInterne(tel), password: String(pin)
+      email: identifiantInterne(tel), password: String(pin),
+      options: { captchaToken: await jetonCaptcha() }
     });
     if (error) {
       throw new Error('Numéro ou code secret incorrect.');
@@ -544,6 +622,7 @@ const API = (function () {
     identifiantInterne: identifiantInterne,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     regenererCode: regenererCode, regenererCodeColis: regenererCodeColis,
+    jetonCaptcha: jetonCaptcha, captchaActif: captchaActif,
     categories: categories, pointsRetrait: pointsRetrait, parametres: parametres,
     tarifs: tarifs, calculerFrais: calculerFrais, colisDuPanier: colisDuPanier,
     produits: produits, produit: produit, boutiques: boutiques, photoUrl: photoUrl,
