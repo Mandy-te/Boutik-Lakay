@@ -392,6 +392,58 @@ Deux conséquences voisines, du même esprit :
   à jour de `auth.users` et pas une insertion — d'où le second déclencheur.
   Sans lui, plus personne n'aurait de fiche.
 
+### Le verrou contre la force brute, et trois interrupteurs à activer
+
+Un code à six chiffres, c'est un million de combinaisons. Le ralentissement
+après plusieurs échecs vivait dans le navigateur : vider le stockage local, ou
+appeler l'API directement, suffisait à le contourner. C'était du décor.
+
+Supabase Auth peut appeler une fonction Postgres à **chaque** vérification de
+mot de passe, avant que l'authentification aboutisse. Celle-ci
+(`hook_verification_mot_de_passe`) ne se contourne pas, quelle que soit la
+manière dont la demande arrive. Elle RALENTIT par paliers — rien jusqu'à trois
+échecs, puis dix secondes, puis une minute, puis **cinq minutes au plafond**.
+À cinq minutes par essai, un million de combinaisons demande plus de neuf ans.
+
+Le plafond n'est pas de la timidité. Ce verrou s'exécute sur des demandes non
+authentifiées : n'importe qui connaissant un numéro peut faire échouer des
+essais exprès pour enfermer son propriétaire dehors. Une heure de blocage, et
+on offre le moyen de paralyser un agent en plein comptoir. Cinq minutes coûtent
+cher à un attaquant et peu à un maladroit. Le compteur s'efface après une heure
+de calme, et dès le premier bon code.
+
+**Il faut l'activer** : tableau de bord Supabase → Authentication → Hooks →
+*Password Verification Attempt* → choisir `hook_verification_mot_de_passe`.
+Tant que ce n'est pas fait, la fonction existe mais personne ne l'appelle.
+
+Deux autres interrupteurs, gratuits, au même endroit :
+
+- **Leaked password protection** (Authentication → Policies) : refuse les mots
+  de passe déjà vus dans des fuites connues. Le contrôleur de Supabase le
+  signale comme désactivé.
+- **MFA / TOTP** pour les comptes d'équipe : une seconde preuve en plus du mot
+  de passe. C'est la meilleure protection disponible pour les comptes qui
+  ouvrent la caisse.
+
+### Les comptes d'équipe ne devraient pas tenir sur six chiffres
+
+Un acheteur protège un panier, un agent protège la caisse, un administrateur
+protège tout. L'administration signale désormais en rouge tout compte agent ou
+administrateur qui n'a qu'une adresse interne `@lakay.local`, donc un code à
+six chiffres. Pour ceux-là, créer le compte depuis le tableau de bord Supabase
+avec une vraie adresse e-mail et un mot de passe long : l'écran de gestion
+accepte déjà l'un ou l'autre.
+
+### Ce qui ressort du contrôleur et qu'il ne faut PAS « corriger »
+
+Le contrôleur de Supabase signale que `est_staff()`, `est_ma_commande()` et
+leurs voisines sont exécutables sans être connecté. C'est normal et nécessaire :
+ces fonctions sont appelées **par les règles de lecture elles-mêmes**. La
+vitrine publique lit `boutiques`, dont la règle appelle `est_staff()` — retirer
+ce droit ferait tomber le catalogue entier pour les visiteurs. Ça a déjà été
+tenté une fois dans ce projet, et tout s'est effondré. Ces fonctions ne révèlent
+rien : elles répondent par oui ou non sur l'appelant lui-même.
+
 ### Troisième correction : les pièces justificatives
 
 `boutiques` est lisible par tout le monde dès qu'une boutique est vérifiée —

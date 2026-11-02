@@ -26,6 +26,7 @@ let aRegler = [];
 let lesSoldes = [];
 let comptes = [];
 let aRevisers = [];
+let faibles = {};     // comptes d'équipe protégés par un simple code à six chiffres
 let documents = {};   // par boutique : { identite, patente } — table à part, hors de la vitrine
 
 /* Recherche et classement. À cinquante boutiques, faire défiler pour
@@ -1452,6 +1453,7 @@ async function rendreComptes() {
   z.innerHTML = '<div class="sechead"><h2>Comptes</h2></div><p class="empty">\u2026</p>';
   try {
     comptes = await OPS.profilsParRole(null);
+    faibles = await OPS.comptesEquipeFaibles().catch(function () { return {}; });
   } catch (e) {
     z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
     return;
@@ -1504,6 +1506,13 @@ function carteCompte(p) {
       esc(p.telephone) + '</span></div>' : '') +
     (sienne.length ? '<div class="ligne"><span>Boutique</span><strong>' +
       sienne.map(function (b) { return esc(b.nom); }).join(', ') + '</strong></div>' : '') +
+    (faibles[p.id]
+      ? '<p class="note" style="color:var(--hot)">Ce compte d\u2019\u00e9quipe n\u2019est prot\u00e9g\u00e9 ' +
+        'que par un code \u00e0 six chiffres. C\u2019est proportionn\u00e9 pour un acheteur, pas ' +
+        'pour quelqu\u2019un qui ouvre la caisse : cr\u00e9e-lui un compte avec une vraie ' +
+        'adresse e-mail et un mot de passe long depuis le tableau de bord Supabase. ' +
+        'L\u2019\u00e9cran de gestion accepte d\u00e9j\u00e0 les deux.</p>'
+      : '') +
     (conflit
       ? '<p class="note" style="color:var(--hot)">Ce compte d\u2019\u00e9quipe poss\u00e8de une ' +
         'boutique. Celui qui v\u00e9rifie les vendeurs ne devrait pas \u00eatre vendeur : ' +
@@ -1572,10 +1581,11 @@ async function rechargerBase() {
     OPS.tousPoints().catch(function () { return []; }),
     OPS.communesVendeurs().catch(function () { return []; }),
     OPS.profilsParRole(null).catch(function () { return []; }),
-    OPS.tousDocuments().catch(function () { return {}; })
+    OPS.tousDocuments().catch(function () { return {}; }),
+    OPS.comptesEquipeFaibles().catch(function () { return {}; })
   ]);
   boutiques = r[0]; lesPlans = r[1]; categories = r[2]; points = r[3];
-  communes = r[4]; comptes = r[5]; documents = r[6];
+  communes = r[4]; comptes = r[5]; documents = r[6]; faibles = r[7];
 }
 
 /* ---------- Événements propres à l'administration --------- */

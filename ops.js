@@ -624,6 +624,16 @@ const OPS = (function () {
      le vendeur a son propre compte, il faut lui en passer la
      propriété : sans ça il ne verra jamais ses commandes.        */
 
+  /* Lesquels des comptes d'équipe n'ont qu'un code à six chiffres.
+     Rend des identifiants, jamais une adresse. */
+  async function comptesEquipeFaibles() {
+    const { data, error } = await sb().rpc('comptes_equipe_faibles');
+    if (error) throw error;
+    const set = {};
+    (data || []).forEach(function (r) { set[r.profil] = true; });
+    return set;
+  }
+
   async function profilsParRole(role) {
     let q = sb().from('profiles').select('id, nom, telephone, role').order('nom');
     if (role) q = q.eq('role', role);
@@ -908,6 +918,7 @@ const OPS = (function () {
     profilsParRole: profilsParRole, transfererBoutique: transfererBoutique,
     lienDocument: lienDocument,
     definirRole: definirRole, duAuxVendeurs: duAuxVendeurs,
+    comptesEquipeFaibles: comptesEquipeFaibles,
     documentsBoutique: documentsBoutique, tousDocuments: tousDocuments,
     deposerDocument: deposerDocument,
     reglerBoutique: reglerBoutique, soldes: soldes,
