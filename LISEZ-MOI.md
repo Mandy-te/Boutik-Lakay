@@ -392,38 +392,62 @@ Deux conséquences voisines, du même esprit :
   à jour de `auth.users` et pas une insertion — d'où le second déclencheur.
   Sans lui, plus personne n'aurait de fiche.
 
-### Le verrou contre la force brute, et trois interrupteurs à activer
+### Le verrou contre la force brute : écrit, mais dormant
 
-Un code à six chiffres, c'est un million de combinaisons. Le ralentissement
-après plusieurs échecs vivait dans le navigateur : vider le stockage local, ou
-appeler l'API directement, suffisait à le contourner. C'était du décor.
+ATTENTION, à lire avant de compter dessus. La fonction
+`hook_verification_mot_de_passe` existe et fonctionne, mais le *Password
+Verification Attempt hook* de Supabase est **réservé aux plans Team et
+Enterprise**. Sur l'offre gratuite, le menu l'affiche grisé. La fonction reste
+en place, testée, prête : le jour d'un passage à un plan supérieur, c'est un
+seul interrupteur. D'ici là, personne ne l'appelle et elle ne protège rien.
 
-Supabase Auth peut appeler une fonction Postgres à **chaque** vérification de
-mot de passe, avant que l'authentification aboutisse. Celle-ci
-(`hook_verification_mot_de_passe`) ne se contourne pas, quelle que soit la
-manière dont la demande arrive. Elle RALENTIT par paliers — rien jusqu'à trois
-échecs, puis dix secondes, puis une minute, puis **cinq minutes au plafond**.
-À cinq minutes par essai, un million de combinaisons demande plus de neuf ans.
+Ce qui protège réellement l'authentification sur l'offre gratuite :
 
-Le plafond n'est pas de la timidité. Ce verrou s'exécute sur des demandes non
-authentifiées : n'importe qui connaissant un numéro peut faire échouer des
-essais exprès pour enfermer son propriétaire dehors. Une heure de blocage, et
-on offre le moyen de paralyser un agent en plein comptoir. Cinq minutes coûtent
-cher à un attaquant et peu à un maladroit. Le compteur s'efface après une heure
-de calme, et dès le premier bon code.
+- **les limites de requêtes** (Authentication → Rate Limits), par adresse IP.
+  Ne pas les serrer trop : en Haïti, les opérateurs font passer des milliers
+  d'abonnés derrière quelques adresses, donc une limite agressive bloque des
+  clients légitimes ;
+- **le CAPTCHA** (Authentication → Attack Protection), lui bien disponible en
+  gratuit, avec hCaptcha ou Cloudflare Turnstile. C'est la vraie réponse à la
+  force brute. Il demande une clé Cloudflare et quelques lignes dans les
+  écrans de connexion : à câbler quand la clé existe, pas avant ;
+- **des mots de passe de vrais mots de passe pour l'équipe**, et MFA/TOTP
+  (Authentication → Multi-Factor), gratuit.
 
-**Il faut l'activer** : tableau de bord Supabase → Authentication → Hooks →
-*Password Verification Attempt* → choisir `hook_verification_mot_de_passe`.
-Tant que ce n'est pas fait, la fonction existe mais personne ne l'appelle.
+### Une visite ne crée plus de compte
 
-Deux autres interrupteurs, gratuits, au même endroit :
+La première ouverture de la boutique ouvrait une session anonyme. Elle ne
+servait à rien : le catalogue, les boutiques, les points de retrait et les
+tarifs se lisent avec la clé publique, sans aucun compte.
 
+Elle coûtait trois choses. Une ligne dans `auth.users` par navigateur, donc du
+bruit. Une porte ouverte à qui veut en créer des milliers. Et surtout, elle
+rendait le CAPTCHA inutilisable : il se serait appliqué à cette session, donc
+à la simple consultation du catalogue, avant même d'avoir vu un article. Sur
+une connexion mobile haïtienne, c'est rédhibitoire.
+
+Conséquence : **l'interrupteur « Anonymous sign-ins » peut être désactivé**
+(Authentication → Sign In / Providers). Plus rien ne l'utilise. Les navigateurs
+qui ont déjà une session anonyme continuent de fonctionner et la transforment
+en vrai compte à l'inscription, comme avant.
+
+### Trois interrupteurs à activer
+
+Tous gratuits, tous dans le tableau de bord Supabase :
+
+- **CAPTCHA** (Authentication → Attack Protection) : la vraie réponse à la
+  force brute sur l'offre gratuite. Créer un widget Cloudflare Turnstile,
+  coller la clé secrète ici, puis câbler la clé publique dans les écrans de
+  connexion. C'est la seule des trois qui demande du code.
 - **Leaked password protection** (Authentication → Policies) : refuse les mots
   de passe déjà vus dans des fuites connues. Le contrôleur de Supabase le
-  signale comme désactivé.
-- **MFA / TOTP** pour les comptes d'équipe : une seconde preuve en plus du mot
-  de passe. C'est la meilleure protection disponible pour les comptes qui
-  ouvrent la caisse.
+  signale comme désactivé. Un clic.
+- **MFA / TOTP** (Authentication → Multi-Factor) pour les comptes d'équipe :
+  une seconde preuve en plus du mot de passe. C'est la meilleure protection
+  disponible pour les comptes qui ouvrent la caisse.
+
+Et un quatrième à **désactiver** : *Anonymous sign-ins*, devenu inutile (voir
+plus haut).
 
 ### Les comptes d'équipe ne devraient pas tenir sur six chiffres
 

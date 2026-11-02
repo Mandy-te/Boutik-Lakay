@@ -77,12 +77,25 @@ const API = (function () {
      donc la RLS fonctionne et le compte peut recevoir un
      téléphone plus tard sans perdre l'historique.            */
 
+  /* Une visite ne crée plus de compte.
+
+     Avant, la première ouverture de la boutique ouvrait une session
+     anonyme. Elle ne servait à rien : le catalogue, les boutiques,
+     les points de retrait et les tarifs se lisent avec la clé
+     publique, sans aucun compte — c'est le rôle `anon` et ses règles
+     de lecture publiques qui le permettent.
+
+     Elle coûtait trois choses, en revanche. Une ligne dans auth.users
+     par navigateur, donc du bruit. Une porte ouverte à qui veut en
+     créer des milliers. Et surtout : le jour où on met un captcha sur
+     l'authentification, il s'appliquerait aussi à cette session —
+     donc à la simple consultation du catalogue, avant même d'avoir vu
+     un article. Sur une connexion mobile haïtienne, c'est rédhibitoire.
+
+     Désormais la fonction constate, elle ne crée rien. */
   async function session() {
     const { data } = await sb().auth.getSession();
-    if (data && data.session) return data.session;
-    const res = await sb().auth.signInAnonymously();
-    if (res.error) throw res.error;
-    return res.data.session;
+    return (data && data.session) ? data.session : null;
   }
 
   async function monId() {
@@ -165,10 +178,22 @@ const API = (function () {
           'Désactivez « Confirm email » dans les réglages Supabase.');
       }
     } else {
-      const { error } = await sb().auth.signUp({
+      const { data: inscrit, error } = await sb().auth.signUp({
         email: ident, password: String(champs.pin)
       });
-      if (error) throw error;
+      if (error) {
+        if (String(error.message).toLowerCase().indexOf('already') !== -1) {
+          throw new Error('Ce numéro a déjà un compte. Connectez-vous.');
+        }
+        throw error;
+      }
+      // Sans session a la sortie, « Confirm email » est reste actif cote
+      // Supabase : le compte existe mais personne n'est connecte, et la
+      // suite echouerait sans qu'on sache pourquoi.
+      if (!inscrit || !inscrit.session) {
+        throw new Error('Le compte n’a pas pu être activé. ' +
+          'Désactivez « Confirm email » dans les réglages Supabase.');
+      }
     }
 
     await majProfil({
@@ -391,7 +416,12 @@ const API = (function () {
      n'y a pas de commande à moitié créée.                    */
 
   async function creerCommande(panier, pointRetrait) {
-    await session();
+    // Sans compte, la base refuserait de toute facon : autant le dire
+    // dans la langue de l'acheteur plutot que de lui servir une erreur
+    // technique au moment de valider.
+    if (!(await session())) {
+      throw new Error('Connectez-vous ou créez un compte avant de commander.');
+    }
     const items = panier.map(function (l) {
       return { variante: l.variante, quantite: l.quantite };
     });
