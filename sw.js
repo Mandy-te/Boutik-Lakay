@@ -17,7 +17,7 @@
 // À incrémenter à chaque mise en ligne : c'est ce numéro qui purge
 // l'ancien cache. Sans ça, un correctif reste invisible sur les
 // téléphones qui ont déjà ouvert l'app une fois.
-const VERSION = 'bl-v3.9.0';
+const VERSION = 'bl-v3.10.0';
 
 const SQUELETTE = [
   './',

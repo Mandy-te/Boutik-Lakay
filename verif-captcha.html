@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vérification du captcha — Boutique Lakay</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="ui.css">
+<style>
+  .page{max-width:620px;margin:0 auto;padding:18px 16px 40px}
+  h1{font-family:var(--display);font-size:21px;letter-spacing:-.02em;margin:0 0 4px}
+  .sous{color:var(--ink-soft);font-size:13.5px;margin:0 0 18px}
+  .carte{border:1px solid var(--line);border-radius:14px;background:var(--surface);
+    padding:14px;margin-bottom:12px}
+  .ligne{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+    border-bottom:1px solid var(--line);font-size:13.5px}
+  .ligne:last-child{border-bottom:0}
+  .ligne span:first-child{color:var(--ink-soft);flex:none}
+  .ligne strong{text-align:right;word-break:break-all;font-variant-numeric:tabular-nums}
+  button{width:100%;border:0;border-radius:12px;padding:14px;font:inherit;font-weight:700;
+    background:var(--brand);color:var(--brand-ink);margin-top:4px}
+  button[disabled]{opacity:.55}
+  .verdict{border-radius:12px;padding:13px;margin-top:12px;font-size:14px;line-height:1.55}
+  .vrai{background:color-mix(in srgb,var(--ok) 16%,transparent);
+    border:1px solid var(--ok);color:var(--ink)}
+  .faux{background:color-mix(in srgb,var(--hot) 14%,transparent);
+    border:1px solid var(--hot);color:var(--ink)}
+  .attente{background:var(--brand-soft);border:1px solid var(--line);color:var(--ink)}
+  .verdict strong{display:block;margin-bottom:5px;font-size:15px}
+  .quoi{font-size:12.5px;color:var(--ink-soft);margin-top:10px}
+  code{font-size:12px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Vérification du captcha</h1>
+  <p class="sous">Cette page ne touche à rien. Elle demande simplement un jeton
+    hCaptcha depuis <em>ce</em> domaine, et dit si ça marche — ce qui est la
+    seule façon sûre de savoir si le domaine est autorisé côté hCaptcha.</p>
+
+  <div class="carte">
+    <div class="ligne"><span>Domaine testé</span><strong id="hote">—</strong></div>
+    <div class="ligne"><span>Clé de site</span><strong id="cle">—</strong></div>
+    <div class="ligne"><span>Fournisseur</span><strong id="fournisseur">—</strong></div>
+  </div>
+
+  <button id="tester">Tester maintenant</button>
+  <div id="verdict"></div>
+
+  <p class="quoi">À garder : le jour où la boutique passera sur son propre nom de
+    domaine, il faudra ajouter ce domaine dans hCaptcha. Cette page le dira en
+    quelques secondes.</p>
+
+</div>
+
+<div id="boite" style="display:none"></div>
+
+<script src="config.js"></script>
+<script>
+/* Page de diagnostic autonome.
+
+   Elle ne charge NI la librairie Supabase NI api.js : si le captcha ne
+   marche pas, on veut savoir si c'est le captcha, et rien d'autre. Le
+   code hCaptcha est donc répété ici en quelques lignes, volontairement.
+
+   La clé de site est publique par nature — c'est le secret, côté
+   Supabase, qui ne doit jamais sortir. */
+
+const el = function (id) { return document.getElementById(id); };
+const conf = (window.CONFIG && CONFIG.captcha) || {};
+
+el('hote').textContent = location.hostname || '(fichier local)';
+el('cle').textContent = conf.cleSite || '— aucune —';
+el('fournisseur').textContent = conf.fournisseur || '—';
+
+function dire(classe, titre, texte) {
+  el('verdict').innerHTML = '<div class="verdict ' + classe + '"><strong>' +
+    titre + '</strong>' + texte + '</div>';
+}
+
+function chargerHCaptcha() {
+  return new Promise(function (resolve, reject) {
+    if (window.hcaptcha) { resolve(window.hcaptcha); return; }
+    window.blPret = function () { resolve(window.hcaptcha); };
+    const sc = document.createElement('script');
+    sc.src = 'https://js.hcaptcha.com/1/api.js?render=explicit&onload=blPret';
+    sc.async = true; sc.defer = true;
+    sc.onerror = function () { reject(new Error('reseau')); };
+    document.head.appendChild(sc);
+    setTimeout(function () { reject(new Error('lent')); }, 20000);
+  });
+}
+
+let widget = null;
+
+el('tester').addEventListener('click', async function () {
+  const b = el('tester');
+  b.disabled = true;
+  b.textContent = 'Test en cours…';
+  dire('attente', 'Patientez', 'La librairie hCaptcha est en train de se charger, ' +
+    'puis un jeton est demandé. Quelques secondes sur une connexion mobile.');
+
+  if (!conf.cleSite) {
+    dire('faux', 'Aucune clé de site',
+      'Le champ <code>captcha.cleSite</code> de <code>config.js</code> est vide. ' +
+      'Rien ne peut être testé tant qu’il n’est pas rempli.');
+    b.disabled = false; b.textContent = 'Tester maintenant';
+    return;
+  }
+
+  let api;
+  try {
+    api = await chargerHCaptcha();
+  } catch (e) {
+    dire('faux', 'La librairie hCaptcha ne se charge pas',
+      e.message === 'lent'
+        ? 'Elle a mis plus de vingt secondes. C’est probablement la connexion. ' +
+          'Réessayez sur une meilleure liaison avant de conclure.'
+        : 'Le navigateur n’a pas pu joindre <code>js.hcaptcha.com</code>. ' +
+          'Un bloqueur de publicité ou un VPN peut en être la cause — Brave ' +
+          'bloque parfois ce genre de script. Essayez avec les boucliers baissés.');
+    b.disabled = false; b.textContent = 'Réessayer';
+    return;
+  }
+
+  try {
+    if (widget === null) {
+      widget = api.render(el('boite'), { sitekey: conf.cleSite, size: 'invisible' });
+    }
+    const r = await api.execute(widget, { async: true });
+    api.reset(widget);
+    const jeton = (r && r.response) || '';
+    if (!jeton) throw new Error('jeton vide');
+    dire('vrai', 'Tout est en ordre',
+      'hCaptcha a délivré un jeton pour <code>' + location.hostname + '</code>. ' +
+      'Le domaine est donc bien autorisé, et le câblage de l’application ' +
+      'fonctionne. Vous pouvez coller le secret dans Supabase et activer la ' +
+      'protection.<br><br><code>' + jeton.slice(0, 28) + '…</code>');
+  } catch (e) {
+    api.reset(widget);
+    dire('faux', 'hCaptcha a refusé',
+      'Le plus souvent, c’est que <code>' + location.hostname + '</code> ne ' +
+      'figure pas dans les domaines autorisés de ce site hCaptcha. ' +
+      'Ouvrez <code>dashboard.hcaptcha.com</code>, section <em>Sites</em>, ' +
+      'choisissez le site de cette clé, et ajoutez-le à la liste des ' +
+      '<em>Hostnames</em>. Attendez une minute, puis retestez ici.<br><br>' +
+      'Vérifiez aussi que la clé affichée plus haut est bien celle de ce ' +
+      'site-là. Message technique : <code>' +
+      String(e && e.message ? e.message : e) + '</code>');
+  }
+  b.disabled = false;
+  b.textContent = 'Retester';
+});
+</script>
+</body>
+</html>

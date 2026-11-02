@@ -452,6 +452,13 @@ aucun octet de données mobiles dépensé. Le captcha ne se déclenche qu'à
 l'inscription et à la connexion, jamais sur le catalogue — c'est précisément
 pour ça que la session anonyme a été supprimée.
 
+**Pour savoir si le domaine est autorisé, ne cherchez pas dans les menus :
+ouvrez `verif-captcha.html`.** Cette page demande un vrai jeton depuis le
+domaine où elle tourne et dit en clair si ça marche. C'est la seule preuve qui
+compte, et elle teste aussi le câblage de l'application. Elle ne charge ni
+Supabase ni `api.js` : si quelque chose cloche, on sait que c'est le captcha et
+rien d'autre. À ressortir le jour du passage sur un nom de domaine propre.
+
 ### Ce qui est réservé aux plans payants, contrairement à ce qu'on croit
 
 Deux protections paraissent disponibles et ne le sont pas sur l'offre gratuite.
