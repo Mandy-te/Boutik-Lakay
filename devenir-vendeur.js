@@ -18,31 +18,14 @@
    ============================================================ */
 
 let boutiqueCreee = null;
-let plans = [];
-let planChoisi = null;
 
-/* Le plan se choisit en voyant ce qu'il coûte ET ce qu'il apporte.
-   Un pourcentage seul ne dit rien à quelqu'un qui démarre. */
-function rendrePlans() {
-  const z = el('listePlans');
-  if (!z) return;
-  z.innerHTML = plans.map(function (p) {
-    return '<button type="button" class="pick" data-plan="' + esc(p.code) + '" ' +
-      'aria-pressed="' + (planChoisi === p.code) + '">' +
-      '<span class="dot"></span><span class="shopmeta">' +
-        '<span class="shopname">' + esc(p.nom) +
-          ' <span class="badge">' + (p.commission_bps / 100) + ' % par vente</span>' +
-          (p.abonnement_mois ? ' <span class="badge">' +
-            htg(p.abonnement_mois) + ' / mois</span>' : '') + '</span>' +
-        (p.description ? '<span class="shopsub">' + esc(p.description) + '</span>' : '') +
-        '<span class="shopsub">' +
-          (p.max_references == null ? 'Articles illimités'
-            : p.max_references + ' articles maximum') +
-          (p.mises_en_avant ? ' \u00b7 ' + p.mises_en_avant + ' mise(s) en avant' : '') +
-        '</span>' +
-      '</span></button>';
-  }).join('');
-}
+/* Toutes les nouvelles boutiques démarrent sur la même formule.
+   La grille tarifaire ne s'affiche plus à l'inscription : elle
+   renseignait la concurrence, et elle demandait à quelqu'un qui n'a
+   pas encore vendu un article de choisir un taux de commission. La
+   montée en gamme se propose depuis l'administration, quand la
+   boutique a du volume — c'est aussi le bon moment pour en parler. */
+const PLAN_DEPART = 'gratuit';
 
 // Les deux listes sont liées : choisir un département remplit les communes.
 document.addEventListener('DOMContentLoaded', function () {
@@ -56,16 +39,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const a = el('champId'), b = el('champPatente');
   if (a) a.innerHTML = champFichier('docId', 'Pièce d\u2019identité', pieces);
   if (b) b.innerHTML = champFichier('docPatente', 'Patente', pieces);
-
-  OPS.plans().then(function (liste) {
-    plans = (liste || []).filter(function (p) { return p.actif; });
-    if (plans.length) planChoisi = plans[0].code;
-    rendrePlans();
-  }).catch(function () {
-    const z = el('listePlans');
-    if (z) z.innerHTML = '<p class="note">Formules indisponibles. ' +
-      'Vérifiez votre connexion et rechargez.</p>';
-  });
 });
 
 function montrer(vue) {
@@ -93,7 +66,6 @@ async function creerTout() {
   if (!boutique) throw new Error('Donnez un nom à votre boutique.');
   if (!departement) throw new Error('Choisissez votre département.');
   if (!commune) throw new Error('Choisissez la commune où se trouvent vos articles.');
-  if (!planChoisi) throw new Error('Choisissez votre formule.');
   const accord = el('vAccord') && el('vAccord').checked;
   if (!accord) {
     throw new Error('Vous devez accepter les conditions d\u2019utilisation ' +
@@ -114,7 +86,7 @@ async function creerTout() {
     description: val('vQuoi')
   });
   boutiqueCreee = b;
-  await OPS.definirPlan(b.id, planChoisi);
+  await OPS.definirPlan(b.id, PLAN_DEPART);
   return b;
 }
 
@@ -149,13 +121,6 @@ async function deposer(champ, genre, zoneMsg) {
 
 document.addEventListener('click', async function (ev) {
   const c = ev.target;
-
-  const p = c.closest ? c.closest('[data-plan]') : null;
-  if (p) {
-    planChoisi = p.getAttribute('data-plan');
-    rendrePlans();
-    return;
-  }
 
   if (c.id === 'creer') {
     await agir(c, 'formErr', creerTout, function () { montrer('pieces'); });

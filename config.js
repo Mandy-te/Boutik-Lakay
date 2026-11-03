@@ -70,8 +70,10 @@ const CONFIG = {
   },
 
   /* --- Zone de service ------------------------------------ */
-  // Pilote : Grand Nord uniquement. On ouvre corridor par corridor.
-  zone: 'Grand Nord',
+  // Affichee a l'acheteur. Ce n'est qu'un libelle : ce qui limite
+  // reellement une commande, c'est la liste des comptoirs de retrait
+  // en base. On ouvre corridor par corridor en ajoutant des points.
+  zone: 'Haïti',
 
   /* --- Phase ----------------------------------------------- */
   // 'pilote' : aucun argent ne transite par la plateforme.

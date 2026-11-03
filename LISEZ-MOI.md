@@ -120,6 +120,23 @@ sont pas transférées, **le vendeur ouvre son espace et ne voit rien**. Dans
 Administration → Comptes : donne le rôle `vendeur` au compte, puis choisis sa
 boutique dans la liste qui apparaît.
 
+### La formule n'est plus choisie à l'inscription
+
+Toute nouvelle boutique démarre sur `gratuit` — la constante `PLAN_DEPART`
+dans `devenir-vendeur.js`. La grille tarifaire ne s'affiche plus
+publiquement, pour deux raisons : elle renseignait la concurrence, et elle
+demandait à quelqu'un qui n'a encore rien vendu de choisir un taux de
+commission qu'il n'a aucun moyen d'évaluer.
+
+La montée en gamme se propose depuis l'administration, quand la boutique a
+du volume. C'est aussi le bon moment commercial : on négocie mieux un taux
+avec un vendeur qui vend déjà qu'avec un inscrit du jour.
+
+**Attention au plafond.** `gratuit` limite à **10 articles**. Un vendeur qui
+en a trente sera bloqué et viendra se plaindre avant que tu aies eu le temps
+de le faire monter. Soit tu surveilles les nouvelles boutiques de près, soit
+tu relèves `max_references` sur `gratuit` en base.
+
 ### Deux refus volontaires
 
 **Publier exige au moins une photo et du stock.** Le bouton refuse sinon. Une
