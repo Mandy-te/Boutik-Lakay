@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
 <link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="pied.css">
 <style>
   .etape{display:flex;gap:11px;align-items:flex-start;padding-block:7px}
   .etape b{flex:none;width:22px;height:22px;border-radius:50%;background:var(--brand);
@@ -86,6 +87,14 @@
         <p class="note">Vous pourrez en changer plus tard en nous contactant.</p>
       </div>
 
+      <label class="accord">
+        <input type="checkbox" id="vAccord">
+        <span>J’accepte les <a href="conditions.html" target="_blank"
+          rel="noopener">conditions d’utilisation</a> et la
+          <a href="confidentialite.html" target="_blank"
+          rel="noopener">politique de confidentialité</a>.</span>
+      </label>
+
       <div id="formErr"></div>
       <button class="cta" id="creer">Créer ma boutique</button>
       <p class="note">Déjà inscrit ? <a href="gestion.html">Connectez-vous ici.</a></p>
@@ -96,8 +105,8 @@
   <section id="vue-pieces" class="wrap" hidden>
     <div class="sechead"><h2>Vos pièces</h2></div>
     <p class="note">Dernière étape. Un agent les vérifie avant de mettre votre
-      boutique en vitrine. Elles restent privées : seule l’équipe de Boutique
-      Lakay peut les consulter.</p>
+      boutique en vitrine. Elles restent privées : seule l’équipe de Konbit
+      Market peut les consulter.</p>
     <div class="pile">
       <div class="bloc">
         <div id="champId"></div>
@@ -124,6 +133,20 @@
     </div>
   </section>
 </main>
+
+<footer class="pied">
+  <div class="wrap">
+    <p class="piedmarque">Konbit Market</p>
+    <nav class="piedliens">
+      <a href="index.html">La boutique</a>
+      <a href="devenir-vendeur.html" aria-current="page">Vendre ici</a>
+      <a href="conditions.html">Conditions d’utilisation</a>
+      <a href="confidentialite.html">Politique de confidentialité</a>
+    </nav>
+    <p class="piednote">Grand Nord, Haïti · Paiement en espèces au comptoir,
+      après vérification du colis.</p>
+  </div>
+</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>

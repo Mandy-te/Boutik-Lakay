@@ -1,0 +1,109 @@
+/* ============================================================
+   Konbit Market — mise en page des documents longs
+   (conditions d'utilisation, politique de confidentialité)
+
+   Ces deux pages ne sont pas des écrans d'application : ce sont
+   des textes qu'on lit du début à la fin, souvent sur un
+   téléphone, parfois en diagonale pour retrouver un point précis.
+   D'où le parti pris : une colonne étroite, des titres qui
+   accrochent l'œil au défilement, et un encadré de résumé en tête
+   pour celui qui ne lira pas tout. Un texte légal que personne ne
+   lit ne protège personne.
+
+   Les couleurs viennent de ui.css : thème clair et sombre suivis
+   sans rien redéclarer ici.
+   ============================================================ */
+
+.doc{
+  padding-block:22px 8px;
+  max-width:640px;          /* plus étroit que l'app : ~70 signes par ligne */
+}
+
+.doc h1{
+  font-family:var(--display);
+  font-size:26px;
+  line-height:1.2;
+  margin:0 0 6px;
+  color:var(--ink);
+}
+
+.doc .maj{
+  margin:0 0 22px;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+}
+
+/* L'encadré de tête. Il dit la vérité utile en cinq lignes :
+   qui vend, qui paie quoi, et à quel moment. */
+.resume{
+  background:var(--brand-soft);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:15px 16px;
+  margin-bottom:28px;
+}
+.resume h2{
+  margin:0 0 7px;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  border:0;
+  padding:0;
+}
+.resume p{ margin:0; font-size:14px; line-height:1.65 }
+
+.doc h2{
+  font-size:17px;
+  line-height:1.3;
+  margin:30px 0 9px;
+  padding-top:16px;
+  border-top:1px solid var(--line);
+  color:var(--ink);
+}
+
+.doc h3{
+  font-size:14px;
+  margin:19px 0 6px;
+  color:var(--ink);
+}
+
+.doc p{
+  margin:0 0 12px;
+  font-size:14.5px;
+  line-height:1.7;
+  color:var(--ink);
+}
+
+.doc ul{
+  margin:0 0 14px;
+  padding-left:19px;
+}
+.doc li{
+  margin-bottom:8px;
+  font-size:14.5px;
+  line-height:1.65;
+  color:var(--ink);
+}
+
+.doc b{ font-weight:700 }
+
+.doc a{ color:var(--brand); text-decoration:underline; text-underline-offset:2px }
+
+.fin{
+  margin-top:28px;
+  padding-top:16px;
+  border-top:1px solid var(--line);
+  font-size:13.5px;
+  color:var(--ink-soft);
+}
+
+@media (max-width:360px){
+  .doc h1{ font-size:23px }
+  .doc h2{ font-size:16px }
+  .doc p, .doc li{ font-size:14px }
+}

@@ -35,6 +35,19 @@ const CONFIG = {
     cleSite: 'b31e411c-e0f6-4e38-9b58-218611dca382'
   },
 
+  /* --- Conditions d'utilisation ----------------------------
+     La version que l'inscription fait accepter. C'est cette chaine
+     qui est enregistree sur le profil, pas un simple « oui ».
+
+     Quand tu modifies conditions.html ou confidentialite.html sur
+     un point de fond, change cette date : les comptes existants
+     porteront alors l'ancienne version, et on saura qui doit
+     reaccepter. La laisser figee reviendrait a dire que tout le
+     monde a accepte un texte que personne n'a vu.               */
+  conditions: {
+    version: '2026-11-02'
+  },
+
   /* --- Monnaie -------------------------------------------- */
   // Les prix sont en CENTIMES de gourde partout dans le code et en base.
   // 2 450,00 HTG = 245000. Jamais de décimales, jamais de float sur l'argent.

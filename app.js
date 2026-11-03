@@ -13,6 +13,13 @@ const T = {
     search:'Chercher un article', boost:'Mises en avant', all:'Tous les articles',
     shops:'Boutiques', shopsNote:'Grand Nord. Chaque vendeur est vérifié avant publication.',
     sellHere:'Vendre sur Konbit Market',
+    footSell:'Vendre ici',
+    footTerms:'Conditions d\u2019utilisation',
+    footPrivacy:'Politique de confidentialit\u00e9',
+    footNote:'Grand Nord, Ha\u00efti \u00b7 Paiement en esp\u00e8ces au comptoir, apr\u00e8s v\u00e9rification de votre colis.',
+    acceptPre:'J\u2019accepte les', acceptAnd:'et la',
+    termsShort:'conditions d\u2019utilisation', privacyShort:'politique de confidentialit\u00e9',
+    acceptNeeded:'Vous devez accepter les conditions pour cr\u00e9er un compte.',
     cart:'Panier', orders:'Mes commandes',
     ordersNote:'Suivez chaque commande jusqu’au retrait.',
     parcel:'Colis', parcelsN:'{n} colis — un par ville de départ',
@@ -91,6 +98,13 @@ const T = {
     search:'Chèche yon atik', boost:'Mete devan', all:'Tout atik yo',
     shops:'Boutik', shopsNote:'Gran Nò. Chak machann verifye anvan nou pibliye.',
     sellHere:'Vann sou Konbit Market',
+    footSell:'Vann isit',
+    footTerms:'Kondisyon itilizasyon',
+    footPrivacy:'Politik konfidansyalite',
+    footNote:'Gran N\u00f2, Ayiti \u00b7 Ou peye an kach nan kontwa a, apre w fin tcheke kolis ou.',
+    acceptPre:'Mwen aksepte', acceptAnd:'ak',
+    termsShort:'kondisyon itilizasyon yo', privacyShort:'politik konfidansyalite a',
+    acceptNeeded:'Ou dwe aksepte kondisyon yo pou w kreye yon kont.',
     cart:'Panyen', orders:'Kòmand mwen',
     ordersNote:'Swiv chak kòmand jiska retrè a.',
     parcel:'Pake', parcelsN:'{n} pake — yon sèl pou chak vil',
@@ -862,6 +876,12 @@ async function rendreCompte() {
         '<div class="champ"><label for="cMail">' + esc(t('yourEmail')) + '</label>' +
           '<input id="cMail" type="email" inputmode="email" autocomplete="email"></div>' +
       '</div>' +
+      '<label class="accord"><input type="checkbox" id="cAccord"><span>' +
+        esc(t('acceptPre')) +
+        ' <a href="conditions.html" target="_blank" rel="noopener">' +
+          esc(t('termsShort')) + '</a> ' + esc(t('acceptAnd')) +
+        ' <a href="confidentialite.html" target="_blank" rel="noopener">' +
+          esc(t('privacyShort')) + '</a>.</span></label>' +
       '<div id="compteErr"></div>' +
       '<button class="cta" id="creerCompte">' + esc(t('createAccount')) + '</button>' +
       '<button class="ghost" id="versConnexion">' + esc(t('haveAccount')) + '</button>' +
@@ -1172,6 +1192,12 @@ function appliquerLangue() {
     const s = document.querySelector('[data-nav="' + k + '"]');
     if (s) s.textContent = t(map[k]);
   });
+  /* Tout element porteur de data-lib prend son texte du dictionnaire.
+     Le pied de page s'en sert, et n'importe quel libelle statique
+     ajoute plus tard suivra la langue sans ligne de code en plus. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-lib]'), function (n) {
+    n.textContent = t(n.getAttribute('data-lib'));
+  });
   aller(vue);
 }
 
@@ -1254,8 +1280,13 @@ document.addEventListener('click', function (ev) {
     }
     if (pin.length !== 6) { z.innerHTML = '<div class="erreur">' + esc(t('needPin')) + '</div>'; return; }
     if (!dep || !com) { z.innerHTML = '<div class="erreur">' + esc(t('needPlace')) + '</div>'; return; }
+    if (!el('cAccord') || !el('cAccord').checked) {
+      z.innerHTML = '<div class="erreur">' + esc(t('acceptNeeded')) + '</div>';
+      return;
+    }
     cible.disabled = true;
-    API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang })
+    API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang,
+                      conditions: true })
       .then(function () { return API.majProfil({ departement: dep, commune: com }); })
       .then(function () {
         invite = false;

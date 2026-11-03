@@ -132,6 +132,57 @@ Trop lourd de conséquences pour un seul appui sur un téléphone tenu à une ma
 
 ---
 
+## Les conditions d'utilisation
+
+Deux pages publiques, `conditions.html` et `confidentialite.html`, liées
+depuis le pied de page de tous les écrans publics. Elles sont écrites pour
+être lues : un encadré de résumé en tête, des titres qui accrochent au
+défilement, et une langue simple. Un texte légal que personne ne lit ne
+protège personne.
+
+### La case à l'inscription
+
+L'inscription — acheteur comme vendeur — ne passe pas sans cocher la case.
+Le contrôle est posé **dans `API.creerCompte()`**, c'est-à-dire dans le seul
+chemin commun aux deux formulaires : un écran qui oublierait la case ne
+pourrait pas créer de compte pour autant.
+
+### Pourquoi la date vient de la base, et pas du téléphone
+
+Le client n'envoie que `conditions_version`. Il n'envoie **jamais** la date.
+C'est un trigger, `horodater_conditions()`, qui inscrit
+`conditions_acceptees_le` au moment où la version change, et qui refuse
+qu'on l'efface ou qu'on la remplace.
+
+La raison est simple : une acceptation qu'un téléphone pourrait antidater ne
+prouverait rien le jour où elle servirait. Si la preuve peut être fabriquée
+par celui qu'elle engage, ce n'est pas une preuve.
+
+### Quand tu modifies le texte
+
+Change `CONFIG.conditions.version` dans `config.js` dès que tu touches au
+fond de l'un des deux documents. Les comptes existants garderont l'ancienne
+version, et on saura qui doit réaccepter. Laisser la version figée
+reviendrait à affirmer que tout le monde a accepté un texte que personne n'a
+vu.
+
+### Ce qui reste à faire
+
+- **Les comptes créés avant cette mise en ligne n'ont rien accepté.** Leur
+  `conditions_version` est vide. Comme la base sera remise à zéro avant
+  l'ouverture au public, le problème se règle tout seul — mais si tu changes
+  d'avis sur le reset, il faudra leur présenter le texte à la connexion.
+- **Pas de version créole.** L'application est bilingue, les deux documents
+  ne le sont pas. C'est une vraie lacune pour une plateforme haïtienne. Si tu
+  fais traduire, il faudra dire laquelle des deux versions fait foi en cas de
+  désaccord d'interprétation.
+- **Ces textes n'ont pas été relus par un avocat.** Ils sont honnêtes et
+  collent à ce que fait réellement la plateforme, ce qui est déjà plus que
+  beaucoup de sites en ligne. Ça ne remplace pas une relecture avant que de
+  l'argent commence à circuler.
+
+---
+
 ## Mise en ligne sur GitHub Pages
 
 1. Crée un dépôt, par exemple `konbit-market`.

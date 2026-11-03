@@ -201,3 +201,12 @@ a.cta{text-decoration:none;display:block;text-align:center;box-sizing:border-box
   display:flex;flex-direction:column;gap:9px;margin-bottom:9px}
 .decl .titreligne{justify-content:space-between}
 .decl .sup{color:var(--hot);background:none;border:0;font-size:17px;padding:0 4px;flex:none}
+
+/* Acceptation des conditions a l'inscription. Case large : on coche
+   avec un pouce, debout, dehors. Le texte reste cliquable en entier
+   grace au <label>, mais les deux liens s'ouvrent dans un onglet a
+   part pour ne pas faire perdre le formulaire a moitie rempli. */
+.accord{display:flex;gap:11px;align-items:flex-start;
+  padding:14px 2px 6px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.accord input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--brand)}
+.accord a{color:var(--brand);text-underline-offset:2px}

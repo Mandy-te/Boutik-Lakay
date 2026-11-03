@@ -227,6 +227,14 @@ const API = (function () {
      ce qui a déjà été fait : le panier, et surtout les commandes
      déjà passées restent attachées au même identifiant. */
   async function creerCompte(champs) {
+    /* L'acceptation des conditions est une condition d'entree, pas une
+       case cosmetique. On la verifie ici, dans le seul chemin par lequel
+       passent l'inscription acheteur et l'inscription vendeur : un ecran
+       qui oublierait la case ne pourrait pas creer de compte pour autant. */
+    if (champs.conditions !== true) {
+      throw new Error('Vous devez accepter les conditions d\u2019utilisation ' +
+        'pour cr\u00e9er un compte.');
+    }
     if (!telValide(champs.tel)) {
       throw new Error('Numéro invalide. Exemple : 3132 4336');
     }
@@ -288,7 +296,10 @@ const API = (function () {
       nom: champs.nom,
       telephone: normaliserTel(champs.tel),
       email_contact: champs.email || null,
-      langue: champs.langue || CONFIG.langueParDefaut
+      langue: champs.langue || CONFIG.langueParDefaut,
+      // On envoie la version acceptee, jamais la date : c'est la base qui
+      // l'horodate. Une date venue du telephone ne prouverait rien.
+      conditions_version: CONFIG.conditions.version
     });
     return true;
   }

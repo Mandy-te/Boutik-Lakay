@@ -94,10 +94,16 @@ async function creerTout() {
   if (!departement) throw new Error('Choisissez votre département.');
   if (!commune) throw new Error('Choisissez la commune où se trouvent vos articles.');
   if (!planChoisi) throw new Error('Choisissez votre formule.');
+  const accord = el('vAccord') && el('vAccord').checked;
+  if (!accord) {
+    throw new Error('Vous devez accepter les conditions d\u2019utilisation ' +
+      'et la politique de confidentialit\u00e9.');
+  }
 
   // Le compte d'abord : la boutique lui appartiendra, et c'est ce
   // rattachement qui lui donnera accès à ses commandes.
-  await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail });
+  await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail,
+    conditions: true });
   await API.majProfil({ departement: departement, commune: commune });
 
   const b = await OPS.creerBoutique({

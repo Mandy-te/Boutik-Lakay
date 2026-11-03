@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="pied.css">
 <style>
 /* Layout : coquille mobile — en-tête collant, rail de catégories,
    grille produits, barre de navigation basse fixe. */
@@ -256,6 +257,14 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
 .nitem svg{width:20px;height:20px}
 .nitem[aria-current="page"]{color:var(--brand)}
 .cartcount{position:absolute;top:4px;left:calc(50% + 7px);background:var(--hot);color:#fff;font-size:9.5px;font-weight:700;min-width:16px;height:16px;border-radius:999px;display:grid;place-items:center;padding:0 4px}
+/* Acceptation des conditions a l'inscription. Case large : on coche
+   avec un pouce, debout, dehors. Le texte reste cliquable en entier
+   grace au <label>, mais les deux liens s'ouvrent dans un onglet a
+   part pour ne pas faire perdre le formulaire a moitie rempli. */
+.accord{display:flex;gap:11px;align-items:flex-start;
+  padding:14px 2px 6px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.accord input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--brand)}
+.accord a{color:var(--brand);text-underline-offset:2px}
 </style>
 </head>
 <body>
@@ -275,7 +284,7 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
 
 <header>
   <div class="wrap hbar">
-    <button class="mark" id="markBtn">Boutique <em>Lakay</em></button>
+    <button class="mark" id="markBtn">Konbit <em>Market</em></button>
     <span class="spacer"></span>
     <button class="clocheBtn" id="clocheBtn" aria-label="Mes messages" hidden>
       <svg><use href="#i-bell"/></svg><span class="pastille" id="nonLus" hidden>0</span>
@@ -356,6 +365,18 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
     <div class="pwrap" id="order"></div>
   </section>
 </main>
+
+<footer class="pied">
+  <div class="wrap">
+    <p class="piedmarque">Konbit Market</p>
+    <nav class="piedliens">
+      <a href="devenir-vendeur.html" data-lib="footSell"></a>
+      <a href="conditions.html" data-lib="footTerms"></a>
+      <a href="confidentialite.html" data-lib="footPrivacy"></a>
+    </nav>
+    <p class="piednote" data-lib="footNote"></p>
+  </div>
+</footer>
 
 <nav>
   <div class="wrap nrow">

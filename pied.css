@@ -1,0 +1,69 @@
+/* ============================================================
+   Konbit Market — pied de page
+
+   Partagé par les quatre écrans publics : la boutique, la page
+   vendeur et les deux pages légales. Les couleurs viennent des
+   variables définies par la page qui l'inclut (index.html en
+   ligne, ui.css ailleurs) : ce fichier n'en déclare aucune, il
+   suit donc automatiquement le thème clair ou sombre.
+
+   Sur la boutique, la barre de navigation basse est fixe et le
+   body réserve déjà sa hauteur en padding-bottom : le pied se
+   pose au-dessus sans la croiser. Rien à prévoir de plus ici.
+   ============================================================ */
+
+.pied{
+  border-top:1px solid var(--line);
+  background:var(--surface);
+  margin-top:36px;
+  padding-block:24px 28px;
+}
+
+.piedmarque{
+  margin:0 0 12px;
+  font-family:var(--display);
+  font-size:15px;
+  letter-spacing:.01em;
+  color:var(--ink);
+}
+
+/* position:static est indispensable, pas decoratif. Sur la boutique,
+   la barre de navigation basse est stylee par le selecteur d'element
+   « nav { position:fixed } » : un <nav> pose dans le pied heriterait
+   de cette regle et irait se coller au bas de l'ecran, sous la barre.
+   On neutralise ici plutot que de renoncer a la balise juste. */
+.piedliens{
+  position:static;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  margin-bottom:14px;
+  background:none;
+  border:0;
+  padding:0;
+}
+
+.piedliens a{
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--ink-soft);
+  text-decoration:none;
+  padding-block:3px;        /* cible tactile sans écarter visuellement */
+}
+.piedliens a:hover{ color:var(--brand); text-decoration:underline }
+
+/* La page où l'on se trouve déjà : lisible, mais pas cliquable du
+   regard. Éviter qu'on appuie pour recharger la même page. */
+.piedliens a[aria-current]{ color:var(--ink); text-decoration:none; cursor:default }
+
+.piednote{
+  margin:0;
+  font-size:12px;
+  line-height:1.6;
+  color:var(--ink-soft);
+}
+
+@media (max-width:360px){
+  .piedliens{ gap:6px 14px }
+  .piedliens a{ font-size:13px }
+}
