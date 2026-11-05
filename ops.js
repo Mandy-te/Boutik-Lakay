@@ -20,21 +20,14 @@ const OPS = (function () {
      donc d'abord quitter cette session anonyme, sinon il reste
      identifié comme un acheteur sans droits.                 */
 
-  /* On accepte une adresse e-mail OU un numéro de téléphone. Un vendeur
-     s'inscrit avec son numéro et un code à 6 chiffres, comme un acheteur ;
-     les agents et l'administration utilisent une adresse. Les deux
-     arrivent ici, et la conversion du numéro en identifiant interne se
-     fait au même endroit que pour les acheteurs. */
+  /* Deleguee a API.connecter : numero ou adresse, meme regle que sur la
+     boutique. Avoir eu deux chemins de connexion dans le projet, c'etait
+     se garantir qu'un jour l'un des deux serait corrige et pas l'autre. */
   async function connexion(identifiant, motdepasse) {
-    const id = String(identifiant || '').trim();
-    const courriel = API.telValide(id) ? API.identifiantInterne(id) : id;
     try { await sb().auth.signOut(); } catch (e) {}
-    const { data, error } = await sb().auth.signInWithPassword({
-      email: courriel, password: motdepasse,
-      options: { captchaToken: await API.jetonCaptcha() }
-    });
-    if (error) throw new Error('Identifiant ou mot de passe incorrect.');
-    return data.user;
+    await API.connecter(identifiant, motdepasse);
+    const { data } = await sb().auth.getUser();
+    return data ? data.user : null;
   }
 
   async function deconnexion() {

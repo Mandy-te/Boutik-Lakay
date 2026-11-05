@@ -62,7 +62,12 @@ async function creerTout() {
 
   if (!nom) throw new Error('Indiquez votre nom.');
   if (!API.telValide(tel)) throw new Error('Numéro invalide. Exemple : 3132 4336');
-  if (pin.length !== 6) throw new Error('Le code secret doit avoir 6 chiffres.');
+  if (!API.emailValide(mail)) {
+    throw new Error('Indiquez une adresse e-mail valide. C\u2019est elle qui ' +
+      'permettra de retrouver votre mot de passe.');
+  }
+  const souciMdp = API.forceMotDePasse(pin, tel);
+  if (souciMdp) throw new Error(souciMdp);
   if (!boutique) throw new Error('Donnez un nom à votre boutique.');
   if (!departement) throw new Error('Choisissez votre département.');
   if (!commune) throw new Error('Choisissez la commune où se trouvent vos articles.');

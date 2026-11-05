@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mot de passe oublié — Konbit Market</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="pied.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <a class="mark" href="index.html">Konbit Market</a>
+    <span class="spacer"></span>
+    <a class="lien" href="index.html">La boutique</a>
+  </div>
+</header>
+
+<main>
+  <section id="vue-demande" class="wrap">
+    <div class="sechead"><h2>Mot de passe oublié</h2></div>
+    <p class="note">Indiquez l’adresse e-mail de votre compte. Nous vous
+      envoyons un lien pour en choisir un nouveau.</p>
+    <div class="pile">
+      <div class="bloc">
+        <div class="champ"><label for="mail">Adresse e-mail</label>
+          <input id="mail" type="email" inputmode="email" autocomplete="email">
+          <span class="aide">Celle que vous avez donnée en créant votre
+            compte.</span></div>
+        <div id="err"></div>
+        <button class="cta" id="envoyer">Envoyer le lien</button>
+        <p class="note">Vous vous souvenez finalement ?
+          <a href="index.html">Retour à la boutique</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-envoye" class="wrap" hidden>
+    <div class="sechead"><h2>C’est parti</h2></div>
+    <div class="pile">
+      <div class="bloc">
+        <p class="note">Si un compte existe avec cette adresse, un lien vient
+          d’y être envoyé. Ouvrez-le depuis ce téléphone, il vous amènera
+          directement à l’écran du nouveau mot de passe.</p>
+        <p class="note"><b>Le lien ne vaut qu’une heure</b>, et une seule
+          fois. Regardez aussi dans vos indésirables.</p>
+        <p class="note">Rien n’arrive au bout de quelques minutes ?
+          Appelez le comptoir : un agent peut vérifier l’adresse enregistrée
+          sur votre compte.</p>
+        <a class="cta" href="index.html"
+           style="display:block;text-align:center;text-decoration:none">Retour à la boutique</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="wrap">
+    <p class="piedmarque">Konbit Market</p>
+    <nav class="piedliens">
+      <a href="index.html">La boutique</a>
+      <a href="conditions.html">Conditions d’utilisation</a>
+      <a href="confidentialite.html">Politique de confidentialité</a>
+    </nav>
+    <p class="piednote">Haïti · Paiement en espèces au comptoir,
+      après vérification du colis.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+/* On ne dit JAMAIS si l'adresse existe : même écran dans tous les cas.
+   Un formulaire qui répond « compte inconnu » est un annuaire, et nos
+   adresses sont de vraies adresses depuis qu'elles servent d'identifiant. */
+(function () {
+  var el = function (i) { return document.getElementById(i); };
+
+  function erreur(txt) {
+    el('err').innerHTML = '<div class="erreur">' + String(txt)
+      .replace(/[&<>"]/g, function (c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c];
+      }) + '</div>';
+  }
+
+  async function envoyer() {
+    var b = el('envoyer');
+    el('err').innerHTML = '';
+    var adresse = (el('mail').value || '').trim();
+    if (!API.emailValide(adresse)) {
+      erreur('Indiquez une adresse e-mail valide.');
+      return;
+    }
+    b.disabled = true;
+    b.textContent = 'Envoi…';
+    try {
+      await API.demanderReinitialisation(adresse);
+      el('vue-demande').hidden = true;
+      el('vue-envoye').hidden = false;
+      window.scrollTo(0, 0);
+    } catch (e) {
+      erreur(e && e.message ? e.message : 'Envoi impossible. Réessayez.');
+      b.disabled = false;
+      b.textContent = 'Envoyer le lien';
+    }
+  }
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target.id === 'envoyer') envoyer();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && ev.target.id === 'mail') envoyer();
+  });
+})();
+</script>
+</body>
+</html>

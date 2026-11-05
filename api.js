@@ -176,17 +176,25 @@ const API = (function () {
   }
 
   /* ---------- Comptes --------------------------------------
-     L'identifiant est le NUMÉRO DE TÉLÉPHONE, pas l'e-mail :
-     en Haïti tout le monde a un numéro, peu consultent une
-     boîte mail, et c'est déjà le numéro que l'agent appelle
-     pour confirmer la commande.
+     Le compte est identifié côté Supabase par L'ADRESSE E-MAIL
+     RÉELLE, et la personne entre avec son NUMÉRO ou son e-mail,
+     au choix. Les deux sont voulus, pour deux raisons opposées :
 
-     Techniquement Supabase authentifie par e-mail et mot de
-     passe. On fabrique donc un identifiant interne à partir
-     du numéro. L'acheteur ne le voit jamais : il saisit son
-     numéro et un code à 6 chiffres, comme pour MonCash.
-     Le jour où un envoi de SMS sera budgété, on passera au
-     vrai téléphone sans toucher à l'interface.              */
+     - en Haïti tout le monde connaît son numéro par cœur, et
+       c'est déjà celui que l'agent appelle pour confirmer ;
+     - mais un mot de passe se perd, et seule une vraie adresse
+       permet d'en renvoyer un. Un identifiant fabriqué comme
+       l'ancien « 509…@lakay.local » ne reçoit rien.
+
+     La traduction numéro -> identifiant se fait en base, par
+     email_pour_telephone() : auth.users n'est pas lisible depuis
+     le navigateur. Cette fonction dit à un appelant anonyme si
+     un numéro a un compte — c'est le prix de la connexion par
+     numéro, et c'est écrit dans sa définition en base.
+
+     DOMAINE_INTERNE ne sert plus à créer de compte. Il reste
+     parce que quatre comptes d'équipe sont nés avec, et qu'ils
+     se connectent toujours par leur numéro.                   */
 
   const DOMAINE_INTERNE = 'lakay.local';
 
@@ -206,6 +214,50 @@ const API = (function () {
 
   function identifiantInterne(tel) {
     return normaliserTel(tel) + '@' + DOMAINE_INTERNE;
+  }
+
+  function normaliserEmail(mail) {
+    return String(mail || '').trim().toLowerCase();
+  }
+
+  // Volontairement permissive : refuser une adresse valide vexe plus
+  // qu'elle ne protege. Ce qu'on attrape, ce sont les fautes de frappe
+  // evidentes et les champs remplis au hasard.
+  function emailValide(mail) {
+    const m = normaliserEmail(mail);
+    return m.length >= 6 && m.length <= 254 &&
+           /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(m) &&
+           m.indexOf('@' + DOMAINE_INTERNE) === -1;
+  }
+
+  /* Solidite du mot de passe. Huit caracteres, et on refuse les trois
+     fautes qui rendent un mot de passe inutile : le numero de telephone
+     lui-meme, une suite de chiffres, un caractere repete.
+
+     Pas de majuscule obligatoire, pas de caractere special impose. Ces
+     regles-la ne produisent pas des mots de passe plus solides, elles
+     produisent « Konbit2026! » chez tout le monde, et des gens qui
+     renoncent a s'inscrire sur un clavier de telephone. */
+  function forceMotDePasse(mdp, tel) {
+    const m = String(mdp || '');
+    if (m.length < 8) {
+      return 'Le mot de passe doit avoir au moins 8 caract\u00e8res.';
+    }
+    if (m.length > 72) {
+      return 'Le mot de passe ne peut pas d\u00e9passer 72 caract\u00e8res.';
+    }
+    if (/^(.)\1+$/.test(m)) {
+      return 'Un seul caract\u00e8re r\u00e9p\u00e9t\u00e9, ce n\u2019est pas un mot de passe.';
+    }
+    if (/^\d+$/.test(m)) {
+      return 'Choisissez autre chose qu\u2019une suite de chiffres : ' +
+        'm\u00ealez des lettres.';
+    }
+    if (tel && m.replace(/\D/g, '') &&
+        normaliserTel(m).length === 11 && normaliserTel(m) === normaliserTel(tel)) {
+      return 'Votre num\u00e9ro ne peut pas servir de mot de passe.';
+    }
+    return null;   // null = rien a redire
   }
 
   // Session de passage : l'acheteur navigue sans compte.
@@ -238,10 +290,25 @@ const API = (function () {
     if (!telValide(champs.tel)) {
       throw new Error('Numéro invalide. Exemple : 3132 4336');
     }
-    if (!champs.pin || String(champs.pin).length < 6) {
-      throw new Error('Le code secret doit avoir 6 chiffres.');
+    if (!emailValide(champs.email)) {
+      throw new Error('Indiquez une adresse e-mail valide. ' +
+        'C\u2019est elle qui permettra de retrouver votre mot de passe.');
     }
-    const ident = identifiantInterne(champs.tel);
+    const souci = forceMotDePasse(champs.pin, champs.tel);
+    if (souci) throw new Error(souci);
+
+    /* Supabase ne controle l'unicite que de l'adresse. Deux comptes au
+       meme numero passeraient donc sans bruit — et casseraient la
+       connexion par telephone pour les deux, puisqu'elle refuse de
+       trancher entre eux. On verifie ici, avant de creer quoi que ce
+       soit. */
+    const dejaPris = await sb().rpc('email_pour_telephone',
+      { p_tel: normaliserTel(champs.tel) });
+    if (dejaPris && dejaPris.data) {
+      throw new Error('Ce num\u00e9ro a d\u00e9j\u00e0 un compte. Connectez-vous.');
+    }
+
+    const ident = normaliserEmail(champs.email);
 
     await session();
     const { data: s } = await sb().auth.getSession();
@@ -261,7 +328,7 @@ const API = (function () {
       }, { captchaToken: jeton });
       if (error) {
         if (String(error.message).toLowerCase().indexOf('already') !== -1) {
-          throw new Error('Ce numéro a déjà un compte. Connectez-vous.');
+          throw new Error('Cette adresse e-mail a d\u00e9j\u00e0 un compte. Connectez-vous.');
         }
         throw error;
       }
@@ -279,7 +346,7 @@ const API = (function () {
       });
       if (error) {
         if (String(error.message).toLowerCase().indexOf('already') !== -1) {
-          throw new Error('Ce numéro a déjà un compte. Connectez-vous.');
+          throw new Error('Cette adresse e-mail a d\u00e9j\u00e0 un compte. Connectez-vous.');
         }
         throw error;
       }
@@ -295,7 +362,7 @@ const API = (function () {
     await majProfil({
       nom: champs.nom,
       telephone: normaliserTel(champs.tel),
-      email_contact: champs.email || null,
+      email_contact: normaliserEmail(champs.email),
       langue: champs.langue || CONFIG.langueParDefaut,
       // On envoie la version acceptee, jamais la date : c'est la base qui
       // l'horodate. Une date venue du telephone ne prouverait rien.
@@ -304,14 +371,67 @@ const API = (function () {
     return true;
   }
 
-  async function connecter(tel, pin) {
-    if (!telValide(tel)) throw new Error('Numéro invalide.');
+  /* On entre avec son numero OU son adresse. Un '@' tranche : personne
+     ne tape d'arobase dans un numero de telephone.
+
+     Le message d'erreur est le MEME dans tous les cas — identifiant
+     inconnu, mot de passe faux, numero partage par deux comptes. Dire
+     « ce numero n'existe pas » rendrait service a qui cherche a savoir
+     quels numeros ont un compte. */
+  async function connecter(identifiant, motDePasse) {
+    const brut = String(identifiant || '').trim();
+    const refus = 'Identifiant ou mot de passe incorrect.';
+    let ident;
+
+    if (brut.indexOf('@') !== -1) {
+      ident = normaliserEmail(brut);
+    } else {
+      if (!telValide(brut)) throw new Error(refus);
+      const { data, error } = await sb().rpc('email_pour_telephone',
+        { p_tel: normaliserTel(brut) });
+      if (error || !data) throw new Error(refus);
+      ident = data;
+    }
+
     const { error } = await sb().auth.signInWithPassword({
-      email: identifiantInterne(tel), password: String(pin),
+      email: ident, password: String(motDePasse),
       options: { captchaToken: await jetonCaptcha() }
     });
+    if (error) throw new Error(refus);
+    return true;
+  }
+
+  /* ---------- Mot de passe oublié -------------------------
+     Supabase envoie le lien. Tant qu'aucun SMTP n'est configuré dans
+     le projet, l'envoi par défaut est limité a quelques messages par
+     heure et finit souvent en indésirables : le parcours existe, il
+     ne devient fiable qu'avec un vrai prestataire d'envoi.
+
+     On ne dit JAMAIS si l'adresse existe. Repondre « compte inconnu »
+     transformerait ce formulaire en annuaire.                      */
+  async function demanderReinitialisation(mail) {
+    const m = normaliserEmail(mail);
+    if (!emailValide(m)) {
+      throw new Error('Indiquez une adresse e-mail valide.');
+    }
+    const retour = location.origin +
+      location.pathname.replace(/[^/]*$/, '') + 'nouveau-mot-de-passe.html';
+    await sb().auth.resetPasswordForEmail(m, {
+      redirectTo: retour,
+      captchaToken: await jetonCaptcha()
+    });
+    return true;   // toujours vrai, quoi qu'il arrive
+  }
+
+  // Appelee depuis la page d'arrivee du lien : a ce moment Supabase a
+  // deja ouvert une session a partir du jeton contenu dans l'adresse.
+  async function definirMotDePasse(nouveau) {
+    const souci = forceMotDePasse(nouveau, null);
+    if (souci) throw new Error(souci);
+    const { error } = await sb().auth.updateUser({ password: String(nouveau) });
     if (error) {
-      throw new Error('Numéro ou code secret incorrect.');
+      throw new Error('Le lien a expir\u00e9 ou a d\u00e9j\u00e0 servi. ' +
+        'Demandez-en un nouveau.');
     }
     return true;
   }
@@ -642,7 +762,11 @@ const API = (function () {
     session: session, monId: monId, profil: profil, majProfil: majProfil,
     normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
     identifiantInterne: identifiantInterne,
+    normaliserEmail: normaliserEmail, emailValide: emailValide,
+    forceMotDePasse: forceMotDePasse,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
+    demanderReinitialisation: demanderReinitialisation,
+    definirMotDePasse: definirMotDePasse,
     monRole: monRole,
     regenererCode: regenererCode, regenererCodeColis: regenererCodeColis,
     jetonCaptcha: jetonCaptcha, captchaActif: captchaActif,

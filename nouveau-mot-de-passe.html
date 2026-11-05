@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nouveau mot de passe — Konbit Market</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="pied.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <a class="mark" href="index.html">Konbit Market</a>
+    <span class="spacer"></span>
+    <a class="lien" href="index.html">La boutique</a>
+  </div>
+</header>
+
+<main>
+  <section id="vue-attente" class="wrap">
+    <div class="sechead"><h2>Un instant</h2></div>
+    <p class="note">Vérification du lien…</p>
+  </section>
+
+  <section id="vue-form" class="wrap" hidden>
+    <div class="sechead"><h2>Nouveau mot de passe</h2></div>
+    <p class="note">Choisissez-en un dont vous vous souviendrez. Une phrase
+      courte vaut mieux qu’un mot compliqué.</p>
+    <div class="pile">
+      <div class="bloc">
+        <div class="champ"><label for="mdp">Mot de passe</label>
+          <input id="mdp" type="password" autocomplete="new-password">
+          <span class="aide">Au moins 8 caractères, avec des lettres.</span></div>
+        <div class="champ"><label for="mdp2">Répétez-le</label>
+          <input id="mdp2" type="password" autocomplete="new-password"></div>
+        <div id="err"></div>
+        <button class="cta" id="valider">Enregistrer</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-mort" class="wrap" hidden>
+    <div class="sechead"><h2>Ce lien ne vaut plus</h2></div>
+    <div class="pile">
+      <div class="bloc">
+        <p class="note">Un lien de réinitialisation expire au bout d’une heure
+          et ne sert qu’une fois. Celui-ci a fait l’un ou l’autre.</p>
+        <a class="cta" href="mot-de-passe-oublie.html"
+           style="display:block;text-align:center;text-decoration:none">En demander un nouveau</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="vue-fin" class="wrap" hidden>
+    <div class="sechead"><h2>C’est fait</h2></div>
+    <div class="pile">
+      <div class="bloc">
+        <p class="note">Votre mot de passe est changé, et vous êtes connecté.</p>
+        <a class="cta" href="index.html"
+           style="display:block;text-align:center;text-decoration:none">Aller à la boutique</a>
+        <a class="ghost" href="gestion.html"
+           style="display:block;text-align:center;text-decoration:none">Je fais partie de l’équipe</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="wrap">
+    <p class="piedmarque">Konbit Market</p>
+    <nav class="piedliens">
+      <a href="index.html">La boutique</a>
+      <a href="conditions.html">Conditions d’utilisation</a>
+      <a href="confidentialite.html">Politique de confidentialité</a>
+    </nav>
+    <p class="piednote">Haïti · Paiement en espèces au comptoir,
+      après vérification du colis.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+/* Le lien reçu par e-mail porte un jeton dans l'adresse. supabase-js le
+   consomme tout seul au chargement et ouvre une session limitée : c'est
+   cette session qui autorise le changement de mot de passe, et elle
+   seule. Pas de session = lien périmé ou déjà utilisé, et on le dit au
+   lieu d'afficher un formulaire qui échouera à la validation. */
+(function () {
+  var el = function (i) { return document.getElementById(i); };
+
+  function montrer(vue) {
+    ['attente', 'form', 'mort', 'fin'].forEach(function (v) {
+      var e = el('vue-' + v);
+      if (e) e.hidden = (v !== vue);
+    });
+    window.scrollTo(0, 0);
+  }
+
+  function erreur(txt) {
+    el('err').innerHTML = '<div class="erreur">' + String(txt)
+      .replace(/[&<>"]/g, function (c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c];
+      }) + '</div>';
+  }
+
+  // La consommation du jeton n'est pas instantanée : on laisse quelques
+  // tentatives plutôt que de déclarer le lien mort au premier coup d'œil.
+  async function attendreSession() {
+    for (var i = 0; i < 12; i++) {
+      try {
+        var r = await API.sb().auth.getSession();
+        if (r && r.data && r.data.session) return true;
+      } catch (e) { /* la librairie n'est pas encore là */ }
+      await new Promise(function (r) { setTimeout(r, 250); });
+    }
+    return false;
+  }
+
+  async function valider() {
+    var b = el('valider');
+    el('err').innerHTML = '';
+    var a = el('mdp').value || '', c = el('mdp2').value || '';
+    if (a !== c) { erreur('Les deux mots de passe ne sont pas identiques.'); return; }
+    var souci = API.forceMotDePasse(a, null);
+    if (souci) { erreur(souci); return; }
+
+    b.disabled = true;
+    b.textContent = 'Enregistrement…';
+    try {
+      await API.definirMotDePasse(a);
+      montrer('fin');
+    } catch (e) {
+      erreur(e && e.message ? e.message : 'Enregistrement impossible.');
+      b.disabled = false;
+      b.textContent = 'Enregistrer';
+    }
+  }
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target.id === 'valider') valider();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && (ev.target.id === 'mdp' || ev.target.id === 'mdp2')) valider();
+  });
+
+  attendreSession().then(function (ok) { montrer(ok ? 'form' : 'mort'); });
+})();
+</script>
+</body>
+</html>

@@ -67,8 +67,12 @@ const T = {
     zone:'Zone de service',
     from:'à partir de', video:'Vidéo de l\u2019article',
     tracking:'Numéro de suivi Flashipping', trackingLink:'Suivre chez Flashipping',
-    yourEmail:'Adresse e-mail (facultatif)',
-    account:'Votre compte', pin:'Code secret (6 chiffres)',
+    yourEmail:'Adresse e-mail',
+    loginId:'Num\u00e9ro ou adresse e-mail',
+    account:'Votre compte', pin:'Mot de passe',
+    pinHint:'Au moins 8 caract\u00e8res, avec des lettres.',
+    emailHint:'C\u2019est par l\u00e0 qu\u2019on vous renverra votre mot de passe si vous l\u2019oubliez.',
+    forgot:'Mot de passe oubli\u00e9 ?',
     myAccount:'Mon compte', createAccount:'Créer mon compte',
     whyAccount:'Un compte vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone. Il nous servira aussi à vous proposer ce qui se vend près de chez vous.',
     departement:'Département', commune:'Commune',
@@ -82,14 +86,15 @@ const T = {
     pinWhy:'Il vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone, même si vous perdez celui-ci.',
     haveAccount:'J\u2019ai déjà un compte', newAccount:'Créer un compte',
     signIn:'Se connecter', signOut:'Se déconnecter',
-    needPin:'Choisissez un code secret de 6 chiffres.',
+    needPin:'Le mot de passe doit avoir au moins 8 caract\u00e8res.',
+    needEmail:'Indiquez une adresse e-mail valide.',
     needTel:'Numéro invalide. Exemple : 3132 4336.',
     connected:'Connecté', guest:'Compte de passage',
     lostCode:'Code perdu ? En demander un nouveau',
     tooMany:'Trop d\u2019essais. Réessayez dans ',
     minutes:'min', seconds:'s',
     attemptsLeft:' essai(s) avant blocage',
-    askAgent:'Si vous avez oublié votre code secret, passez à une succursale Flashipping avec votre pièce d\u2019identité : un agent peut vous rouvrir l\u2019accès.',
+    askAgent:'Mot de passe oublié ? Demandez un lien par e-mail depuis la page de connexion. Si vous n\u2019avez plus accès à votre boîte, passez à une succursale Flashipping avec votre pièce d\u2019identité : un agent peut vous rouvrir l\u2019accès.',
     newCodeDone:'Nouveau code. L\u2019ancien ne vaut plus rien.',
     emailWhy:'Pour être prévenu dès que votre colis est disponible au comptoir.',
     videoData:'La vidéo ne se télécharge que si vous appuyez sur lecture.'
@@ -152,8 +157,12 @@ const T = {
     zone:'Zòn sèvis',
     from:'apati de', video:'Videyo atik la',
     tracking:'Nimewo swivi Flashipping', trackingLink:'Swiv li lakay Flashipping',
-    yourEmail:'Adrès imèl (si w vle)',
-    account:'Kont ou', pin:'Kòd sekrè (6 chif)',
+    yourEmail:'Adr\u00e8s im\u00e8l',
+    loginId:'Nim\u00e8wo oswa adr\u00e8s im\u00e8l',
+    account:'Kont ou', pin:'M\u00f2 de pas',
+    pinHint:'Omwen 8 karakt\u00e8, ak l\u00e8t ladan l.',
+    emailHint:'Se la n ap voye m\u00f2 de pas ou si w bliye l.',
+    forgot:'Ou bliye m\u00f2 de pas ou ?',
     myAccount:'Kont mwen', createAccount:'Kreye kont mwen',
     whyAccount:'Yon kont kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn. L ap sèvi tou pou nou pwopoze w sa k ap vann toupre lakay ou.',
     departement:'Depatman', commune:'Komin',
@@ -167,14 +176,15 @@ const T = {
     pinWhy:'Li kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn, menm si w pèdi sa a.',
     haveAccount:'Mwen gen yon kont deja', newAccount:'Kreye yon kont',
     signIn:'Konekte', signOut:'Dekonekte',
-    needPin:'Chwazi yon kòd sekrè 6 chif.',
+    needPin:'M\u00f2 de pas la dwe gen omwen 8 karakt\u00e8.',
+    needEmail:'Mete yon adr\u00e8s im\u00e8l ki bon.',
     needTel:'Nimewo pa bon. Egzanp : 3132 4336.',
     connected:'Konekte', guest:'Kont pasaj',
     lostCode:'Ou pèdi kòd la ? Mande yon lòt',
     tooMany:'Twòp esè. Tanpri tann ',
     minutes:'min', seconds:'s',
     attemptsLeft:' esè anvan nou bloke w',
-    askAgent:'Si w bliye kòd sekrè w, pase nan yon sikisal Flashipping ak pyès idantite w : yon ajan ka relouvri aksè a.',
+    askAgent:'Ou bliye mò de pas ou ? Mande yon lyen pa imèl sou paj koneksyon an. Si w pa gen aksè ak bwat imèl ou ankò, pase nan yon sikisal Flashipping ak pyès idantite w : yon ajan ka relouvri aksè a.',
     newCodeDone:'Nouvo kòd. Ansyen an pa vo anyen ankò.',
     emailWhy:'Pou nou avèti w lè kolis ou disponib nan kontwa a.',
     videoData:'Videyo a ap chaje sèlman si w peze bouton lekti a.'
@@ -849,14 +859,15 @@ async function rendreCompte() {
   if (invite && modeConnexion) {
     z.innerHTML =
       '<div class="shoplist">' +
-        '<div class="champ"><label for="lTel">' + esc(t('yourPhone')) + '</label>' +
-          '<input id="lTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
+        '<div class="champ"><label for="lTel">' + esc(t('loginId')) + '</label>' +
+          '<input id="lTel" type="text" autocomplete="username"></div>' +
         '<div class="champ"><label for="lPin">' + esc(t('pin')) + '</label>' +
-          '<input id="lPin" type="password" inputmode="numeric" maxlength="6" ' +
-          'autocomplete="current-password"></div>' +
+          '<input id="lPin" type="password" autocomplete="current-password"></div>' +
       '</div>' +
       '<div id="compteErr"></div>' +
       '<button class="cta" id="seConnecter">' + esc(t('signIn')) + '</button>' +
+      '<p class="note" style="text-align:center">' +
+        '<a href="mot-de-passe-oublie.html">' + esc(t('forgot')) + '</a></p>' +
       '<button class="ghost" id="versInscription">' + esc(t('newAccount')) + '</button>';
     return;
   }
@@ -869,12 +880,13 @@ async function rendreCompte() {
           '<input id="cNom" autocomplete="name"></div>' +
         '<div class="champ"><label for="cTel">' + esc(t('yourPhone')) + '</label>' +
           '<input id="cTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
-        '<div class="champ"><label for="cPin">' + esc(t('pin')) + '</label>' +
-          '<input id="cPin" type="password" inputmode="numeric" maxlength="6" ' +
-          'autocomplete="new-password"></div>' +
-        champsLieu(null, null, 'c') +
         '<div class="champ"><label for="cMail">' + esc(t('yourEmail')) + '</label>' +
-          '<input id="cMail" type="email" inputmode="email" autocomplete="email"></div>' +
+          '<input id="cMail" type="email" inputmode="email" autocomplete="email">' +
+          '<span class="aide">' + esc(t('emailHint')) + '</span></div>' +
+        '<div class="champ"><label for="cPin">' + esc(t('pin')) + '</label>' +
+          '<input id="cPin" type="password" autocomplete="new-password">' +
+          '<span class="aide">' + esc(t('pinHint')) + '</span></div>' +
+        champsLieu(null, null, 'c') +
       '</div>' +
       '<label class="accord"><input type="checkbox" id="cAccord"><span>' +
         esc(t('acceptPre')) +
@@ -1278,7 +1290,13 @@ document.addEventListener('click', function (ev) {
       z.innerHTML = '<div class="erreur">' + esc(API.telValide(tel) ? t('needName') : t('needTel')) + '</div>';
       return;
     }
-    if (pin.length !== 6) { z.innerHTML = '<div class="erreur">' + esc(t('needPin')) + '</div>'; return; }
+    if (!API.emailValide(mail)) {
+      z.innerHTML = '<div class="erreur">' + esc(t('needEmail')) + '</div>'; return;
+    }
+    const souciMdp = API.forceMotDePasse(pin, tel);
+    if (souciMdp) {
+      z.innerHTML = '<div class="erreur">' + esc(souciMdp) + '</div>'; return;
+    }
     if (!dep || !com) { z.innerHTML = '<div class="erreur">' + esc(t('needPlace')) + '</div>'; return; }
     if (!el('cAccord') || !el('cAccord').checked) {
       z.innerHTML = '<div class="erreur">' + esc(t('acceptNeeded')) + '</div>';
@@ -1314,8 +1332,15 @@ document.addEventListener('click', function (ev) {
   }
 
   if (cible.id === 'seConnecter') {
-    const tel = API.normaliserTel((el('lTel').value || '').trim());
-    const pin = (el('lPin').value || '').trim();
+    /* Le champ accepte un num\u00e9ro OU une adresse : on ne le normalise
+       donc plus comme un t\u00e9l\u00e9phone, ce qui d\u00e9truirait l'adresse. La
+       cl\u00e9 du compteur d'essais suit la m\u00eame logique, sinon « +509 31
+       32 43 36 » et « 50931324336 » auraient deux compteurs s\u00e9par\u00e9s
+       et le blocage se contournerait en changeant l'espacement. */
+    const brut = (el('lTel').value || '').trim();
+    const tel = brut.indexOf('@') !== -1
+      ? brut.toLowerCase() : API.normaliserTel(brut);
+    const pin = el('lPin').value || '';
     const z = el('compteErr');
 
     const reste = blocageRestant(tel);

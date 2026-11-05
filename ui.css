@@ -210,3 +210,9 @@ a.cta{text-decoration:none;display:block;text-align:center;box-sizing:border-box
   padding:14px 2px 6px;font-size:13.5px;line-height:1.55;color:var(--ink)}
 .accord input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--brand)}
 .accord a{color:var(--brand);text-underline-offset:2px}
+
+/* Texte d'aide sous un champ. Court, gris, et il dit POURQUOI on
+   demande la chose plutot que de repeter l'etiquette : « c'est par
+   la qu'on vous renverra votre mot de passe » fait remplir le champ,
+   « adresse e-mail » ne fait rien. */
+.aide{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:var(--ink-soft)}

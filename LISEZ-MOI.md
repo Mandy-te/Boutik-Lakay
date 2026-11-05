@@ -25,20 +25,33 @@ compte au paiement, sans rien perdre.
 
 **Authentication → Sign In / Providers → Email → « Confirm email » → désactiver.**
 
-Pourquoi : les comptes sont identifiés par le NUMÉRO DE TÉLÉPHONE et un code
-secret à 6 chiffres. Techniquement Supabase authentifie par e-mail, donc l'app
-fabrique un identifiant interne à partir du numéro (`50931324336@lakay.local`).
-L'acheteur ne le voit jamais. Si la confirmation reste active, Supabase attend
-une validation sur une adresse qui n'existe pas, et aucun compte ne s'active.
+Pourquoi : tant que « Confirm email » est actif, un compte reste en attente de
+validation et ne s'active jamais. Les comptes se créent en une seule fois, sans
+aller-retour par la boîte mail.
 
-Pourquoi le téléphone plutôt que l'e-mail : tout le monde a un numéro, peu
-consultent une boîte mail, et c'est déjà le numéro que l'agent appelle pour
-confirmer la commande. Pourquoi un code à 6 chiffres plutôt qu'un mot de passe :
-c'est le geste de MonCash, connu de tous, et bien plus facile à taper sur un
-téléphone.
+### 1 ter. Les deux réglages à corriger pour les mots de passe
 
-Le jour où un envoi de SMS sera budgété, on passera au vrai téléphone Supabase
-sans rien changer à ce que voit l'acheteur.
+**Authentication → Policies → Minimum password length → passer de 6 à 8.**
+Il était à 6 du temps des codes à six chiffres. L'application en exige déjà 8,
+mais un appel direct à l'API passerait encore avec 6 : ce réglage est le
+plancher réel.
+
+**Authentication → URL Configuration → Redirect URLs → ajouter
+`https://konbitmarket.com/nouveau-mot-de-passe.html`.** Sans cette ligne,
+Supabase refuse de renvoyer la personne sur la page où elle choisit son
+nouveau mot de passe, et le lien reçu par e-mail ne mène nulle part.
+
+### 1 quater. Brancher un vrai envoi d'e-mail
+
+**Project Settings → Authentication → SMTP Settings.**
+
+Sans ça, « mot de passe oublié » ne marche pas vraiment. L'envoi fourni par
+défaut est limité à quelques messages par heure, destiné aux essais, et finit
+régulièrement en indésirables. Resend, Brevo et Mailgun ont tous une offre
+gratuite largement suffisante pour le pilote.
+
+C'est la pièce qui manque pour que le mot de passe soit un vrai mot de passe.
+Tant qu'elle n'est pas là, chaque oubli devient un appel au comptoir.
 
 ### 2. Créer ton compte d'équipe
 
@@ -241,18 +254,38 @@ pour une partie des visiteurs.
 **3. `Settings → Pages → Enforce HTTPS`**, à cocher une fois que GitHub a fini
 de délivrer le certificat (quelques minutes à une heure après la propagation).
 
+### Comment on se connecte
+
+Le compte est identifié côté Supabase par **l'adresse e-mail réelle**, et la
+personne entre avec **son numéro ou son adresse**, au choix. Les deux sont
+voulus, pour deux raisons opposées : tout le monde connaît son numéro par
+cœur, mais seul un e-mail réel permet de renvoyer un mot de passe perdu.
+
+La traduction numéro → identifiant se fait en base, dans
+`email_pour_telephone()` : `auth.users` n'est pas lisible depuis le navigateur.
+
+**Ce que cette fonction coûte, et qu'il faut savoir :** elle dit à un appelant
+anonyme si un numéro a un compte, et rend l'adresse. C'est le prix de « se
+connecter par numéro OU par e-mail » — y renoncer demanderait de renoncer à
+l'une des deux. Ce qu'on a limité : rien ne sort si le numéro n'est pas
+exactement valide, et rien ne sort non plus si deux comptes le partagent.
+
+**Un numéro, un compte — et c'est la base qui le garantit mal.** Supabase ne
+contrôle l'unicité que de l'adresse, pas du téléphone. `creerCompte()`
+vérifie donc avant de créer. Si deux comptes finissent quand même au même
+numéro, la connexion par téléphone cesse de marcher **pour les deux** : elle
+refuse de trancher au hasard. Ils peuvent toujours entrer par leur adresse.
+
 ### Le domaine interne `lakay.local` — à ne pas toucher
 
-L'ancien nom survit à un endroit, volontairement. Un acheteur s'inscrit avec
-son numéro de téléphone, pas avec un e-mail ; `api.js` lui fabrique un
-identifiant interne `50931324336@lakay.local`. Cette adresse n'existe pas,
-n'est jamais affichée, n'est jamais tapée — elle est calculée à partir du
-numéro à chaque connexion.
+Il ne sert plus à créer de compte, mais quatre comptes d'équipe sont nés
+avec, du temps où l'identifiant était fabriqué à partir du numéro
+(`50931324336@lakay.local`). Ils se connectent toujours, par leur numéro.
 
-Changer cette chaîne dans `api.js` couperait la connexion de tous les comptes
-déjà créés : l'application chercherait `…@konbitmarket.local` alors que la
-base contient `…@lakay.local`. C'est une migration de comptes, pas un
-renommage. Tant qu'il n'y a pas une vraie raison, on laisse.
+Changer cette chaîne dans `api.js` les couperait. Et comme ces adresses ne
+reçoivent rien, ces comptes-là **ne peuvent pas récupérer un mot de passe
+oublié**. À recréer avec de vraies adresses — l'administration les signale
+déjà en rouge.
 
 ---
 
@@ -599,10 +632,10 @@ Et un interrupteur à **désactiver** : *Anonymous sign-ins*, devenu inutile
 
 Un acheteur protège un panier, un agent protège la caisse, un administrateur
 protège tout. L'administration signale désormais en rouge tout compte agent ou
-administrateur qui n'a qu'une adresse interne `@lakay.local`, donc un code à
-six chiffres. Pour ceux-là, créer le compte depuis le tableau de bord Supabase
-avec une vraie adresse e-mail et un mot de passe long : l'écran de gestion
-accepte déjà l'un ou l'autre.
+administrateur qui n'a qu'une adresse interne `@lakay.local`. Ces comptes-là
+sont nés avec un code à six chiffres, et surtout ils ne peuvent **pas**
+récupérer un mot de passe oublié : leur adresse ne reçoit rien. Pour ceux-là,
+recréer le compte avec une vraie adresse e-mail et un mot de passe long.
 
 ### Ce qui ressort du contrôleur et qu'il ne faut PAS « corriger »
 

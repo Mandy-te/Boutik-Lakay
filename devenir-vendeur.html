@@ -53,13 +53,15 @@
         <div class="champ"><label for="vTel">Téléphone</label>
           <input id="vTel" type="tel" inputmode="tel" autocomplete="username"
                  placeholder="3132 4336"></div>
-        <div class="champ"><label for="vPin">Code secret (6 chiffres)</label>
-          <input id="vPin" type="password" inputmode="numeric" maxlength="6"
-                 autocomplete="new-password"></div>
-        <div class="champ"><label for="vMail">Adresse e-mail (facultatif)</label>
-          <input id="vMail" type="email" inputmode="email" autocomplete="email"></div>
-        <p class="note">Votre numéro est votre identifiant. Le code secret vous
-          permet de revenir depuis n’importe quel téléphone.</p>
+        <div class="champ"><label for="vMail">Adresse e-mail</label>
+          <input id="vMail" type="email" inputmode="email" autocomplete="email">
+          <span class="aide">C’est par là qu’on vous renverra votre mot de passe
+            si vous l’oubliez.</span></div>
+        <div class="champ"><label for="vPin">Mot de passe</label>
+          <input id="vPin" type="password" autocomplete="new-password">
+          <span class="aide">Au moins 8 caractères, avec des lettres.</span></div>
+        <p class="note">Vous reviendrez avec votre numéro ou votre adresse,
+          au choix, depuis n’importe quel téléphone.</p>
       </div>
 
       <div class="bloc">
