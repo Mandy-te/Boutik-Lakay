@@ -43,15 +43,58 @@ nouveau mot de passe, et le lien reçu par e-mail ne mène nulle part.
 
 ### 1 quater. Brancher un vrai envoi d'e-mail
 
-**Project Settings → Authentication → SMTP Settings.**
-
-Sans ça, « mot de passe oublié » ne marche pas vraiment. L'envoi fourni par
+Sans ça, « mot de passe oublié » ne marche pas vraiment : l'envoi fourni par
 défaut est limité à quelques messages par heure, destiné aux essais, et finit
-régulièrement en indésirables. Resend, Brevo et Mailgun ont tous une offre
-gratuite largement suffisante pour le pilote.
+régulièrement en indésirables. C'est la pièce qui manque pour que le mot de
+passe soit un vrai mot de passe.
 
-C'est la pièce qui manque pour que le mot de passe soit un vrai mot de passe.
-Tant qu'elle n'est pas là, chaque oubli devient un appel au comptoir.
+**1. Créer le domaine d'envoi chez Resend** (3 000 messages par mois gratuits,
+100 par jour — large pour le pilote). Ajouter le domaine **`konbitmarket.com`**.
+Resend génère trois enregistrements à poser chez Porkbun :
+
+| Type | Host | Valeur |
+|---|---|---|
+| MX | `send` | celle affichée par Resend, priorité **20** |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` |
+| TXT | `resend._domainkey` | la clé DKIM affichée par Resend |
+
+Deux pièges, et ils coûtent une soirée chacun :
+
+- **Resend passe par le sous-domaine `send`, pas par la racine.** C'est
+  précisément ce qui évite d'écraser les MX de redirection d'e-mail de
+  Porkbun et le SPF de la racine, qui restent en place et continuent de
+  servir. Ne touche pas aux enregistrements existants.
+- **La priorité MX doit être 20, pas 10.** Porkbun utilise déjà 10 pour
+  `fwd1.porkbun.com`. Deux MX à la même priorité, et le comportement devient
+  imprévisible.
+
+Dans le champ Host de Porkbun, on écrit **seulement le préfixe** : `send`, pas
+`send.konbitmarket.com`.
+
+**2. Brancher Resend dans Supabase.**
+Authentication → Emails → SMTP Settings, activer « Enable Custom SMTP » :
+
+| Champ | Valeur |
+|---|---|
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` |
+| Password | la clé d'API Resend |
+| Sender email | `contact@konbitmarket.com` |
+| Sender name | `Konbit Market` |
+
+**3. Coller le courriel en français.**
+Authentication → Emails → **Reset Password** : remplacer le contenu par
+`courriels/reinitialisation.html` de ce dépôt.
+
+Le modèle par défaut de Supabase est en anglais et dit « Reset Password ».
+Envoyé à quelqu'un qui vend du savon aux Gonaïves, il ne veut rien dire. Le
+nôtre est en français avec le créole sous chaque phrase qui compte, en
+tableaux et styles en ligne parce que les clients de messagerie ignorent les
+feuilles de style, et le lien est répété en texte brut sous le bouton pour
+les téléphones qui ne les affichent pas.
+
+La seule variable est `{{ .ConfirmationURL }}`. La renommer casse tout.
 
 ### 2. Créer ton compte d'équipe
 
