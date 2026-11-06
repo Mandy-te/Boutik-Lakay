@@ -27,6 +27,7 @@ let lesSoldes = [];
 let comptes = [];
 let aRevisers = [];
 let faibles = {};     // comptes d'équipe protégés par un simple code à six chiffres
+let enAttente = [];   // inscrits qui n'ont jamais confirmé leur adresse
 let documents = {};   // par boutique : { identite, patente } — table à part, hors de la vitrine
 
 /* Recherche et classement. À cinquante boutiques, faire défiler pour
@@ -1471,6 +1472,7 @@ async function rendreComptes() {
   try {
     comptes = await OPS.profilsParRole(null);
     faibles = await OPS.comptesEquipeFaibles().catch(function () { return {}; });
+    enAttente = await OPS.comptesEnAttente().catch(function () { return []; });
   } catch (e) {
     z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
     return;
@@ -1495,17 +1497,47 @@ async function rendreComptes() {
       'il faut les transf\u00e9rer.</p>' +
     '<div class="bloc"><div class="titreligne"><h2>Faire entrer un agent</h2></div>' +
       '<p class="note">Il cr\u00e9e d\u2019abord un compte ordinaire sur la boutique en ligne, ' +
-      'avec son num\u00e9ro et son code \u00e0 six chiffres. Tu lui donnes ensuite le r\u00f4le ' +
+      'avec son adresse e-mail et un mot de passe. Tu lui donnes ensuite le r\u00f4le ' +
       '\u00ab Agent \u00bb ci-dessous. Il se connecte alors sur cette adresse, qui m\u00e8ne ' +
       'chacun \u00e0 son \u00e9cran selon son r\u00f4le :</p>' +
       '<div class="lienbloc num" id="lienEquipe">gestion.html</div>' +
       '<button class="mini" id="copierLien">Copier le lien complet</button>' +
       '<div id="msg-lien"></div></div>' +
+    blocEnAttente() +
     barreRecherche('comptes', 'Nom ou num\u00e9ro\u2026', GROUPES) +
     '<div class="pile" id="listeComptes">' + listeComptes() + '</div>';
 
   const lien = el('lienEquipe');
   if (lien) lien.textContent = location.href.replace(/[^/]*$/, '') + 'gestion.html';
+}
+
+/* Les inscriptions restées en rade. Une adresse mal tapée ne se voit
+   nulle part ailleurs : la personne croit son compte créé, l'équipe ne
+   la voit dans aucune liste, et elle revient au comptoir en disant que
+   « le site ne marche pas ». Au-delà de 24 h, c'est presque toujours ça. */
+function blocEnAttente() {
+  if (!enAttente.length) return '';
+  const vieux = enAttente.filter(function (c) { return c.heures >= 24; }).length;
+  return '<div class="bloc">' +
+    '<div class="titreligne"><h2>En attente de confirmation</h2>' +
+      '<span class="pill att">' + enAttente.length + '</span></div>' +
+    '<p class="note">Ces comptes existent mais leur adresse n’a jamais été ' +
+      'confirmée : ils ne peuvent pas se connecter.' +
+      (vieux ? ' <b>' + vieux + ' attend' + (vieux > 1 ? 'ent' : '') +
+        ' depuis plus de 24 heures</b> — c’est en général une adresse mal ' +
+        'tapée. Appelle-les.' : '') + '</p>' +
+    enAttente.map(function (c) {
+      return '<div class="line' + (c.heures >= 24 ? ' retire' : '') + '">' +
+        '<span>' + esc(c.nom || 'Sans nom') + '<br>' +
+          '<span class="cshop">' + esc(c.email || '') + '</span></span>' +
+        '<span style="text-align:right">' +
+          '<a href="tel:+' + esc(c.telephone || '') + '">' +
+            esc(c.telephone || '') + '</a><br>' +
+          '<span class="cshop">' + (c.heures < 1 ? 'moins d’une heure'
+            : Math.round(c.heures) + ' h') + '</span></span>' +
+      '</div>';
+    }).join('') +
+  '</div>';
 }
 
 function carteCompte(p) {

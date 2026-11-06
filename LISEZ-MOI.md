@@ -21,13 +21,45 @@ de commander — un mur d'inscription à l'entrée fait fuir un premier visiteur
 qui ne connaît pas encore la plateforme. La session de passage devient un vrai
 compte au paiement, sans rien perdre.
 
-### 1 bis. Désactiver la confirmation d'e-mail
+### 1 bis. La confirmation d'e-mail est ACTIVE
 
-**Authentication → Sign In / Providers → Email → « Confirm email » → désactiver.**
+**Authentication → Sign In / Providers → Email → « Confirm email » → activé.**
 
-Pourquoi : tant que « Confirm email » est actif, un compte reste en attente de
-validation et ne s'active jamais. Les comptes se créent en une seule fois, sans
-aller-retour par la boîte mail.
+Elle a longtemps été désactivée, et le LISEZ-MOI disait de la laisser éteinte.
+C'était juste à l'époque où les comptes naissaient avec une fausse adresse
+`@lakay.local` : Supabase envoyait une confirmation dans le vide, et le compte
+restait bloqué pour toujours.
+
+Depuis que l'identifiant est une vraie adresse, la raison a disparu — et une
+autre est apparue. **Rien ne vérifiait l'identité de personne**, ni téléphone
+ni e-mail. N'importe qui pouvait ouvrir vingt comptes avec des adresses
+inventées et déclencher vingt commandes que des commerçants préparent pour
+rien. Le coût tombait sur eux, pas sur le fraudeur.
+
+**Ce que ça change dans le code, et qui n'est pas évident :** `signUp` ne rend
+plus de session tant que le lien n'est pas cliqué. Le navigateur n'a donc plus
+aucun moment où il pourrait écrire le profil. Tout ce qui le compose — nom,
+téléphone, commune, département, langue, version des conditions — voyage
+**dans les métadonnées de l'inscription**, et c'est le trigger `creer_profil()`
+qui le pose en base. Un champ oublié dans `metadonnees` est un champ perdu pour
+toujours, sans erreur nulle part.
+
+**Le parcours vendeur a un pli de plus.** La boutique se crée juste après le
+compte, et sans session elle ne peut pas. `devenir-vendeur.js` met donc la fiche
+de côté dans `localStorage` sous `km.brouillon.boutique`, affiche l'écran
+d'attente, et termine le travail au retour du lien. Si le vendeur ouvre le
+courriel sur un autre appareil, le brouillon est perdu : son compte est actif,
+sa boutique reste à créer, et l'écran le lui dit. L'administration a déjà le
+bouton « Créer en attente » pour la saisir à sa place.
+
+**Les comptes en rade se voient.** Onglet Comptes de l'administration, bloc
+« En attente de confirmation », avec le nombre d'heures. Au-delà de 24 h c'est
+presque toujours une adresse mal tapée : la personne croit son compte créé,
+n'apparaît dans aucune liste, et revient au comptoir en disant que le site ne
+marche pas. Sans ce bloc, personne ne le saurait.
+
+**Les deux modèles de courriel** sont dans `courriels/` : `confirmation.html`
+pour « Confirm signup », `reinitialisation.html` pour « Reset Password ».
 
 ### 1 ter. Les deux réglages à corriger pour les mots de passe
 

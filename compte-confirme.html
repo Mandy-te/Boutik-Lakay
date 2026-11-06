@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Compte confirmé — Konbit Market</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14161C">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&display=swap">
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="pied.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap hbar">
+    <a class="mark" href="index.html">Konbit Market</a>
+    <span class="spacer"></span>
+    <a class="lien" href="index.html">La boutique</a>
+  </div>
+</header>
+
+<main>
+  <section id="vue-attente" class="wrap">
+    <div class="sechead"><h2>Un instant</h2></div>
+    <p class="note">Vérification du lien…</p>
+  </section>
+
+  <section id="vue-ok" class="wrap" hidden>
+    <div class="sechead"><h2>Votre compte est actif</h2></div>
+    <div class="pile"><div class="bloc">
+      <p class="note">Votre adresse est confirmée et vous êtes connecté.
+        Vous pouvez commander.</p>
+      <a class="cta" href="index.html"
+         style="display:block;text-align:center;text-decoration:none">Aller à la boutique</a>
+      <p class="note">Vous vous inscriviez comme vendeur ?
+        <a href="devenir-vendeur.html">Terminez l’enregistrement de votre
+        boutique</a>.</p>
+    </div></div>
+  </section>
+
+  <section id="vue-mort" class="wrap" hidden>
+    <div class="sechead"><h2>Ce lien ne vaut plus</h2></div>
+    <div class="pile"><div class="bloc">
+      <p class="note">Un lien de confirmation expire au bout de 24 heures et
+        ne sert qu’une fois. Celui-ci a fait l’un ou l’autre.</p>
+      <p class="note">Si votre compte est déjà confirmé, connectez-vous
+        simplement. Sinon, retournez à l’inscription et demandez un nouveau
+        lien.</p>
+      <a class="cta" href="index.html"
+         style="display:block;text-align:center;text-decoration:none">Aller à la boutique</a>
+    </div></div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="wrap">
+    <p class="piedmarque">Konbit Market</p>
+    <nav class="piedliens">
+      <a href="index.html">La boutique</a>
+      <a href="conditions.html">Conditions d’utilisation</a>
+      <a href="confidentialite.html">Politique de confidentialité</a>
+    </nav>
+    <p class="piednote">Haïti · Paiement en espèces au comptoir,
+      après vérification du colis.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script>
+/* Supabase ramène ici avec un jeton dans l'adresse. supabase-js le consomme
+   au chargement et ouvre la session : une session présente vaut preuve que
+   l'adresse appartient bien à la personne. Pas de session = lien périmé ou
+   déjà utilisé, et on le dit plutôt que d'afficher une réussite fausse. */
+(function () {
+  var el = function (i) { return document.getElementById(i); };
+
+  function montrer(vue) {
+    ['attente', 'ok', 'mort'].forEach(function (v) {
+      var e = el('vue-' + v);
+      if (e) e.hidden = (v !== vue);
+    });
+  }
+
+  async function attendreSession() {
+    for (var i = 0; i < 12; i++) {
+      try {
+        var r = await API.sb().auth.getSession();
+        if (r && r.data && r.data.session) return true;
+      } catch (e) { /* la librairie n'est pas encore prête */ }
+      await new Promise(function (r) { setTimeout(r, 250); });
+    }
+    return false;
+  }
+
+  attendreSession().then(async function (ok) {
+    if (!ok) { montrer('mort'); return; }
+    /* Un membre de l'équipe qui confirme son adresse n'a rien à faire sur
+       la boutique : on l'envoie directement à son espace. */
+    var role = await API.monRole().catch(function () { return null; });
+    if (role && role !== 'acheteur') { location.replace('gestion.html'); return; }
+    montrer('ok');
+  });
+})();
+</script>
+</body>
+</html>

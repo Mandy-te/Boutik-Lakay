@@ -73,6 +73,12 @@ const T = {
     pinHint:'Au moins 8 caract\u00e8res, avec des lettres.',
     emailHint:'C\u2019est par l\u00e0 qu\u2019on vous renverra votre mot de passe si vous l\u2019oubliez.',
     forgot:'Mot de passe oubli\u00e9 ?',
+    checkInbox:'V\u00e9rifiez votre bo\u00eete mail',
+    checkInboxWhy:'Nous venons d\u2019envoyer un lien \u00e0 cette adresse. Ouvrez-le pour activer votre compte \u2014 sans \u00e7a, vous ne pourrez pas commander.',
+    checkInboxSpam:'Rien au bout de deux minutes ? Regardez dans vos ind\u00e9sirables. Et v\u00e9rifiez que l\u2019adresse est la bonne.',
+    resendBtn:'Renvoyer le lien',
+    resendDone:'C\u2019est reparti. Si un compte attend sur cette adresse, le lien vient d\u2019y \u00eatre renvoy\u00e9.',
+    doneConfirm:'J\u2019ai confirm\u00e9, me connecter',
     myAccount:'Mon compte', createAccount:'Créer mon compte',
     whyAccount:'Un compte vous permet de retrouver vos commandes et votre code de retrait depuis n\u2019importe quel téléphone. Il nous servira aussi à vous proposer ce qui se vend près de chez vous.',
     departement:'Département', commune:'Commune',
@@ -163,6 +169,12 @@ const T = {
     pinHint:'Omwen 8 karakt\u00e8, ak l\u00e8t ladan l.',
     emailHint:'Se la n ap voye mo de pas ou si w bliye l.',
     forgot:'Ou bliye mo de pas ou ?',
+    checkInbox:'Al gade bwat im\u00e8l ou',
+    checkInboxWhy:'Nou fenk voye yon lyen nan adr\u00e8s sa a. Louvri l pou aktive kont ou \u2014 san sa, ou p ap ka komande.',
+    checkInboxSpam:'Anyen apre de minit ? Gade nan sa yo rele endezirab yo. Epi tcheke si adr\u00e8s la bon.',
+    resendBtn:'Voye lyen an ank\u00f2',
+    resendDone:'Li pati. Si yon kont ap tann sou adr\u00e8s sa a, lyen an fenk voye.',
+    doneConfirm:'Mwen konfime, kite m konekte',
     myAccount:'Kont mwen', createAccount:'Kreye kont mwen',
     whyAccount:'Yon kont kite w jwenn kòmand ou ak kòd retrè w sou nenpòt telefòn. L ap sèvi tou pou nou pwopoze w sa k ap vann toupre lakay ou.',
     departement:'Depatman', commune:'Komin',
@@ -214,6 +226,7 @@ let horsLigne = false, catalogueVieux = false;
 let envoiEnCours = false;
 let invite = true;        // session de passage tant qu'aucun compte n'est cree
 let roleCourant = null;   // 'acheteur', 'vendeur', 'agent' ou 'admin'
+let attenteConfirmation = null;   // adresse en attente de confirmation
 let modeConnexion = false; // le panier montre le formulaire de connexion
 
 /* ---------- Utilitaires ----------------------------------- */
@@ -856,6 +869,24 @@ async function rendreCompte() {
   el('compteTitre').textContent = t('myAccount');
   const z = el('compteCorps');
 
+  /* Le compte existe, le profil aussi, mais l'adresse n'est pas encore
+     prouvée. On ne renvoie donc pas la personne au formulaire : elle
+     croirait que son inscription a échoué et recommencerait, pour se
+     heurter à « cette adresse a déjà un compte ». */
+  if (attenteConfirmation) {
+    z.innerHTML =
+      '<div class="bloc">' +
+        '<h3 style="margin:0 0 8px">' + esc(t('checkInbox')) + '</h3>' +
+        '<p class="note" style="padding:0"><b>' + esc(attenteConfirmation) + '</b></p>' +
+        '<p class="note" style="padding:0">' + esc(t('checkInboxWhy')) + '</p>' +
+        '<p class="note" style="padding:0">' + esc(t('checkInboxSpam')) + '</p>' +
+      '</div>' +
+      '<div id="compteErr"></div>' +
+      '<button class="cta" id="renvoyerLien">' + esc(t('resendBtn')) + '</button>' +
+      '<button class="ghost" id="versConnexion">' + esc(t('doneConfirm')) + '</button>';
+    return;
+  }
+
   if (invite && modeConnexion) {
     z.innerHTML =
       '<div class="shoplist">' +
@@ -1276,7 +1307,23 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'orderBack') { aller('orders'); return; }
   if (cible.id === 'orderBtn') { envoyerCommande(); return; }
 
-  if (cible.id === 'versConnexion') { modeConnexion = true; rendreCompte(); return; }
+  if (cible.id === 'versConnexion') {
+    attenteConfirmation = null; modeConnexion = true; rendreCompte(); return;
+  }
+
+  if (cible.id === 'renvoyerLien') {
+    const z = el('compteErr');
+    cible.disabled = true;
+    API.renvoyerConfirmation(attenteConfirmation)
+      .then(function () {
+        z.innerHTML = '<div class="warnbox">' + esc(t('resendDone')) + '</div>';
+      })
+      .catch(function (e) {
+        z.innerHTML = '<div class="erreur">' + esc(e.message) + '</div>';
+      })
+      .then(function () { cible.disabled = false; });
+    return;
+  }
   if (cible.id === 'versInscription') { modeConnexion = false; rendreCompte(); return; }
 
   if (cible.id === 'compteBtn') { aller('compte'); return; }
@@ -1304,9 +1351,16 @@ document.addEventListener('click', function (ev) {
     }
     cible.disabled = true;
     API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail, langue: lang,
-                      conditions: true })
-      .then(function () { return API.majProfil({ departement: dep, commune: com }); })
-      .then(function () {
+                      departement: dep, commune: com, conditions: true })
+      .then(function (r) {
+        // Le lieu part maintenant dans les métadonnées : plus de majProfil
+        // ici, qui échouerait faute de session quand la confirmation
+        // d'adresse est active.
+        if (r && r.confirmation) {
+          attenteConfirmation = API.normaliserEmail(mail);
+          rendreCompte();
+          return;
+        }
         invite = false;
         ecrireEssais(API.normaliserTel(tel), null);
         aller(panier.length ? 'cart' : 'home');

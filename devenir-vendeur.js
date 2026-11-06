@@ -41,8 +41,29 @@ document.addEventListener('DOMContentLoaded', function () {
   if (b) b.innerHTML = champFichier('docPatente', 'Patente', pieces);
 });
 
+/* Le brouillon de boutique, gardé le temps que l'adresse soit confirmée.
+
+   Avec « Confirm email » actif, le compte naît sans session : impossible
+   de créer la boutique dans la foulée. Plutôt que de redemander tout le
+   formulaire au retour, on le met de côté ici et on finit le travail dès
+   que le vendeur revient par le lien. localStorage peut échouer — navigation
+   privée, stockage bloqué — donc tout est sous try/catch : au pire on perd
+   le brouillon, jamais le compte. */
+const CLE_BROUILLON = 'km.brouillon.boutique';
+
+function garderBrouillon(d) {
+  try { localStorage.setItem(CLE_BROUILLON, JSON.stringify(d)); } catch (e) {}
+}
+function lireBrouillon() {
+  try { return JSON.parse(localStorage.getItem(CLE_BROUILLON) || 'null'); }
+  catch (e) { return null; }
+}
+function oublierBrouillon() {
+  try { localStorage.removeItem(CLE_BROUILLON); } catch (e) {}
+}
+
 function montrer(vue) {
-  ['form', 'pieces', 'fin'].forEach(function (v) {
+  ['form', 'attente', 'pieces', 'fin'].forEach(function (v) {
     const e = el('vue-' + v);
     if (e) e.hidden = (v !== vue);
   });
@@ -77,21 +98,49 @@ async function creerTout() {
       'et la politique de confidentialit\u00e9.');
   }
 
-  // Le compte d'abord : la boutique lui appartiendra, et c'est ce
-  // rattachement qui lui donnera accès à ses commandes.
-  await API.creerCompte({ tel: tel, pin: pin, nom: nom, email: mail,
-    conditions: true });
-  await API.majProfil({ departement: departement, commune: commune });
-
-  const b = await OPS.creerBoutique({
+  const fiche = {
     nom: boutique,
     departement: departement,
     commune: commune,
     adresse_repere: val('vRepere'),
-    description: val('vQuoi')
+    description: val('vQuoi'),
+    tel: tel
+  };
+
+  // Le compte d'abord : la boutique lui appartiendra, et c'est ce
+  // rattachement qui lui donnera accès à ses commandes.
+  const r = await API.creerCompte({
+    tel: tel, pin: pin, nom: nom, email: mail,
+    departement: departement, commune: commune,
+    conditions: true,
+    retour: 'devenir-vendeur.html'    // le lien du courriel ramène ici
+  });
+
+  if (r && r.confirmation) {
+    // Pas de session : la boutique ne peut pas se créer maintenant. On
+    // garde la fiche et on reprendra au retour du lien.
+    garderBrouillon(fiche);
+    el('attenteMail').textContent = API.normaliserEmail(mail);
+    montrer('attente');
+    return null;
+  }
+
+  return await poserBoutique(fiche);
+}
+
+// Création de la boutique proprement dite, appelée soit dans la foulée de
+// l'inscription, soit au retour du lien de confirmation.
+async function poserBoutique(fiche) {
+  const b = await OPS.creerBoutique({
+    nom: fiche.nom,
+    departement: fiche.departement,
+    commune: fiche.commune,
+    adresse_repere: fiche.adresse_repere,
+    description: fiche.description
   });
   boutiqueCreee = b;
   await OPS.definirPlan(b.id, PLAN_DEPART);
+  oublierBrouillon();
   return b;
 }
 
@@ -128,7 +177,21 @@ document.addEventListener('click', async function (ev) {
   const c = ev.target;
 
   if (c.id === 'creer') {
-    await agir(c, 'formErr', creerTout, function () { montrer('pieces'); });
+    await agir(c, 'formErr', creerTout, function (b) {
+      // creerTout rend null quand l'adresse reste à confirmer : l'écran
+      // d'attente est déjà affiché, on ne passe pas aux pièces.
+      if (b) montrer('pieces');
+    });
+    return;
+  }
+
+  if (c.id === 'renvoyer') {
+    await agir(c, 'attenteErr', function () {
+      return API.renvoyerConfirmation(el('attenteMail').textContent,
+        'devenir-vendeur.html');
+    }, function () {
+      msg('attenteErr', 'Lien renvoyé. Regardez votre boîte, et vos indésirables.', 'ok');
+    });
     return;
   }
 
@@ -170,8 +233,23 @@ document.addEventListener('change', async function (ev) {
     const { data } = await API.sb().auth.getSession();
     if (!data || !data.session || data.session.user.is_anonymous) return;
 
-    const b = await API.maBoutique();
-    if (!b) return;                     // compte sans boutique : formulaire
+    let b = await API.maBoutique();
+
+    if (!b) {
+      /* Session ouverte, pas de boutique : soit le vendeur revient de son
+         courriel de confirmation avec son brouillon sous la main, soit il
+         a ouvert le lien ailleurs et le brouillon est perdu. */
+      const brouillon = lireBrouillon();
+      if (!brouillon) return;           // formulaire, comme avant
+      try {
+        b = await poserBoutique(brouillon);
+      } catch (e) {
+        msg('formErr', 'Votre compte est actif, mais la boutique n’a pas pu ' +
+          'être créée : ' + e.message + ' Appelez le comptoir, un agent la ' +
+          'saisira avec vous.', 'ko');
+        return;
+      }
+    }
 
     boutiqueCreee = b;
     // Les pièces vivent dans leur propre table, lisible par le seul

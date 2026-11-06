@@ -310,6 +310,25 @@ const API = (function () {
 
     const ident = normaliserEmail(champs.email);
 
+    /* Tout ce qui compose le profil part DANS LES METADONNEES de
+       l'inscription, pas dans un appel qui suivrait.
+
+       Avec « Confirm email » actif, signUp ne rend aucune session tant que
+       la personne n'a pas cliqué dans son courriel : il n'y a donc plus de
+       moment, côté navigateur, où l'on pourrait écrire le profil. C'est le
+       trigger creer_profil() qui le pose en base, à partir de ces
+       métadonnées. Un champ oublié ici est un champ perdu pour toujours. */
+    const metadonnees = {
+      nom: champs.nom,
+      telephone: normaliserTel(champs.tel),
+      commune: champs.commune || null,
+      departement: champs.departement || null,
+      langue: champs.langue || CONFIG.langueParDefaut,
+      email_contact: ident,
+      // La version acceptée, jamais la date : la base l'horodate.
+      conditions_version: CONFIG.conditions.version
+    };
+
     await session();
     const { data: s } = await sb().auth.getSession();
     const anonyme = s && s.session && s.session.user.is_anonymous;
@@ -339,34 +358,53 @@ const API = (function () {
         throw new Error('Le compte n’a pas pu être activé. ' +
           'Désactivez « Confirm email » dans les réglages Supabase.');
       }
-    } else {
-      const { data: inscrit, error } = await sb().auth.signUp({
-        email: ident, password: String(champs.pin),
-        options: { captchaToken: jeton }
-      });
-      if (error) {
-        if (String(error.message).toLowerCase().indexOf('already') !== -1) {
-          throw new Error('Cette adresse e-mail a d\u00e9j\u00e0 un compte. Connectez-vous.');
-        }
-        throw error;
-      }
-      // Sans session a la sortie, « Confirm email » est reste actif cote
-      // Supabase : le compte existe mais personne n'est connecte, et la
-      // suite echouerait sans qu'on sache pourquoi.
-      if (!inscrit || !inscrit.session) {
-        throw new Error('Le compte n’a pas pu être activé. ' +
-          'Désactivez « Confirm email » dans les réglages Supabase.');
-      }
+      await majProfil(metadonnees);
+      return { confirmation: false };
     }
 
-    await majProfil({
-      nom: champs.nom,
-      telephone: normaliserTel(champs.tel),
-      email_contact: normaliserEmail(champs.email),
-      langue: champs.langue || CONFIG.langueParDefaut,
-      // On envoie la version acceptee, jamais la date : c'est la base qui
-      // l'horodate. Une date venue du telephone ne prouverait rien.
-      conditions_version: CONFIG.conditions.version
+    const { data: inscrit, error } = await sb().auth.signUp({
+      email: ident, password: String(champs.pin),
+      options: {
+        captchaToken: jeton,
+        data: metadonnees,
+        emailRedirectTo: pageDuSite(champs.retour || 'compte-confirme.html')
+      }
+    });
+    if (error) {
+      if (String(error.message).toLowerCase().indexOf('already') !== -1) {
+        throw new Error('Cette adresse e-mail a déjà un compte. Connectez-vous.');
+      }
+      throw error;
+    }
+
+    /* Pas de session = « Confirm email » est actif, et c'est voulu : le
+       compte existe, le profil aussi — le trigger vient de le poser à
+       partir des métadonnées — mais rien ne s'ouvre tant que l'adresse
+       n'a pas été prouvée.
+
+       On ne lève donc plus d'erreur ici. L'appelant a besoin de savoir
+       lequel des deux mondes il habite pour afficher le bon écran. */
+    return { confirmation: !(inscrit && inscrit.session) };
+  }
+
+  // L'adresse d'une page du site, quelle que soit celle d'où l'on part.
+  function pageDuSite(fichier) {
+    return location.origin + location.pathname.replace(/[^/]*$/, '') + fichier;
+  }
+
+  /* Le courriel de confirmation s'est perdu, ou a expiré. Comme pour la
+     réinitialisation, on ne dit jamais si l'adresse existe : même réponse
+     dans tous les cas. */
+  async function renvoyerConfirmation(mail, retour) {
+    const m = normaliserEmail(mail);
+    if (!emailValide(m)) throw new Error('Indiquez une adresse e-mail valide.');
+    await sb().auth.resend({
+      type: 'signup',
+      email: m,
+      options: {
+        emailRedirectTo: pageDuSite(retour || 'compte-confirme.html'),
+        captchaToken: await jetonCaptcha()
+      }
     });
     return true;
   }
@@ -414,10 +452,8 @@ const API = (function () {
     if (!emailValide(m)) {
       throw new Error('Indiquez une adresse e-mail valide.');
     }
-    const retour = location.origin +
-      location.pathname.replace(/[^/]*$/, '') + 'nouveau-mot-de-passe.html';
     await sb().auth.resetPasswordForEmail(m, {
-      redirectTo: retour,
+      redirectTo: pageDuSite('nouveau-mot-de-passe.html'),
       captchaToken: await jetonCaptcha()
     });
     return true;   // toujours vrai, quoi qu'il arrive
@@ -766,6 +802,7 @@ const API = (function () {
     forceMotDePasse: forceMotDePasse,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     demanderReinitialisation: demanderReinitialisation,
+    renvoyerConfirmation: renvoyerConfirmation,
     definirMotDePasse: definirMotDePasse,
     monRole: monRole,
     regenererCode: regenererCode, regenererCodeColis: regenererCodeColis,

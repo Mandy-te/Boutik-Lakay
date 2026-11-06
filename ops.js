@@ -620,6 +620,16 @@ const OPS = (function () {
 
   /* Lesquels des comptes d'équipe n'ont qu'un code à six chiffres.
      Rend des identifiants, jamais une adresse. */
+  /* Qui s'est inscrit mais n'a jamais confirme son adresse. Sans cette
+     liste, quelqu'un qui s'est trompe d'adresse reste bloque dehors et
+     personne ne le sait : ni lui, qui croit son compte cree, ni l'equipe,
+     qui ne le voit nulle part. */
+  async function comptesEnAttente() {
+    const { data, error } = await sb().rpc('comptes_en_attente');
+    if (error) throw error;
+    return data || [];
+  }
+
   async function comptesEquipeFaibles() {
     const { data, error } = await sb().rpc('comptes_equipe_faibles');
     if (error) throw error;
@@ -920,6 +930,7 @@ const OPS = (function () {
     lienDocument: lienDocument,
     definirRole: definirRole, duAuxVendeurs: duAuxVendeurs,
     comptesEquipeFaibles: comptesEquipeFaibles,
+    comptesEnAttente: comptesEnAttente,
     documentsBoutique: documentsBoutique, tousDocuments: tousDocuments,
     deposerDocument: deposerDocument,
     reglerBoutique: reglerBoutique, soldes: soldes,
