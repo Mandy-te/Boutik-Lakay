@@ -225,6 +225,28 @@ en a trente sera bloqué et viendra se plaindre avant que tu aies eu le temps
 de le faire monter. Soit tu surveilles les nouvelles boutiques de près, soit
 tu relèves `max_references` sur `gratuit` en base.
 
+### La recherche de boutiques apparaît toute seule
+
+Côté acheteur, l'onglet Boutiques n'affiche sa barre de recherche qu'à partir
+de **7 boutiques** — la constante `SEUIL_RECHERCHE` dans `app.js`. En dessous,
+un champ de recherche au-dessus de trois lignes n'aide personne et occupe
+l'écran d'un téléphone.
+
+Les pastilles de ville sont comptées **depuis les données**, pas depuis une
+liste figée des dix départements : on ne propose jamais un filtre qui ne
+rendrait rien, et une nouvelle ville apparaît d'elle-même dès qu'une boutique
+s'y installe. Elles ne sortent qu'à partir de deux villes différentes.
+
+La comparaison passe par `cleLieu()`, la même fonction que pour les lieux :
+accents, casse et espaces ignorés. « mandy st » trouve « Mandy Store », et
+« mirey » trouve « Chez Mirèy ». Sans ça, personne ne retrouve rien — taper un
+accent sur un clavier de téléphone, personne ne le fait.
+
+**Seule la liste est réécrite à chaque lettre, jamais la barre.** Re-rendre le
+champ fermerait le clavier à chaque frappe, ce qui rend la recherche
+inutilisable sur mobile. C'est la même règle que dans l'administration, et
+c'est le genre de détail qu'une « simplification » casse sans s'en apercevoir.
+
 ### Deux refus volontaires
 
 **Publier exige au moins une photo et du stock.** Le bouton refuse sinon. Une

@@ -12,6 +12,8 @@ const T = {
   fr: {
     search:'Chercher un article', boost:'Mises en avant', all:'Tous les articles',
     shops:'Boutiques', shopsNote:'Chaque vendeur est vérifié avant publication.',
+    searchShop:'Nom de boutique ou ville\u2026',
+    allCities:'Toutes', noShopMatch:'Aucune boutique ne correspond.',
     sellHere:'Vendre sur Konbit Market',
     footSell:'Vendre ici',
     footTerms:'Conditions d\u2019utilisation',
@@ -108,6 +110,8 @@ const T = {
   ht: {
     search:'Chèche yon atik', boost:'Mete devan', all:'Tout atik yo',
     shops:'Boutik', shopsNote:'Chak machann verifye anvan nou pibliye.',
+    searchShop:'Non boutik oswa vil\u2026',
+    allCities:'Tout', noShopMatch:'Nou pa jwenn okenn boutik.',
     sellHere:'Vann sou Konbit Market',
     footSell:'Vann isit',
     footTerms:'Kondisyon itilizasyon',
@@ -450,17 +454,38 @@ function rendreAccueil() {
 
 /* ---------- Rendu : boutiques ----------------------------- */
 
-async function rendreBoutiques() {
-  el('shopsTitle').textContent = t('shops');
-  el('shopsNote').textContent = t('shopsNote');
-  if (!cache.boutiques.length) {
-    try { const r = await API.boutiques(); cache.boutiques = r.data || []; } catch (e) {}
+/* Recherche de boutiques.
+
+   Elle n'apparaît qu'à partir d'un certain nombre : avec trois boutiques,
+   un champ de recherche au-dessus de trois lignes est une insulte polie.
+   Au-delà, faire défiler devient une corvée. Le seuil est ici, change-le
+   si tu veux le voir plus tôt. */
+const SEUIL_RECHERCHE = 7;
+let filtreB = { q: '', commune: 'toutes' };
+
+// Même règle de comparaison que pour les lieux : accents, casse et espaces
+// ignorés, pour qu'on trouve « Mandy Store » en tapant « mandy st ».
+function contientTexte(champ, q) {
+  const k = cleLieu(q);
+  return k === '' || cleLieu(champ).indexOf(k) !== -1;
+}
+
+function boutiquesFiltrees() {
+  return cache.boutiques.filter(function (s) {
+    if (filtreB.commune !== 'toutes' && !memeLieu(s.commune, filtreB.commune)) {
+      return false;
+    }
+    return contientTexte(s.nom, filtreB.q) || contientTexte(s.commune, filtreB.q);
+  });
+}
+
+function listeBoutiquesHtml() {
+  const b = boutiquesFiltrees();
+  if (!b.length) {
+    return '<p class="empty">' +
+      esc(cache.boutiques.length ? t('noShopMatch') : t('emptyShops')) + '</p>';
   }
-  const b = cache.boutiques;
-  const lienVendre = '<a class="ghost" href="devenir-vendeur.html" ' +
-    'style="display:block;text-align:center;text-decoration:none;margin-top:6px">' +
-    esc(t('sellHere')) + '</a>';
-  el('shopList').innerHTML = (b.length ? b.map(function (s) {
+  return b.map(function (s) {
     return '<button class="shop" data-shop="' + esc(s.id) + '">' +
       '<span class="avatar t-rad">' + esc((s.nom || '?').charAt(0)) + '</span>' +
       '<span class="shopmeta">' +
@@ -468,7 +493,67 @@ async function rendreBoutiques() {
           ' <span class="badge ok">' + esc(t('verified')) + '</span></span>' +
         '<span class="shopsub">' + esc(s.commune) + '</span>' +
       '</span></button>';
-  }).join('') : '<p class="empty">' + esc(t('emptyShops')) + '</p>') + lienVendre;
+  }).join('');
+}
+
+/* Les villes proposées sont celles qui ont vraiment une boutique, comptées
+   depuis les données. Pas de liste figée des dix départements : on ne
+   propose jamais un filtre qui ne rendrait rien. */
+function villesDesBoutiques() {
+  const vues = {};
+  cache.boutiques.forEach(function (s) {
+    const k = cleLieu(s.commune);
+    if (!k) return;
+    if (!vues[k]) vues[k] = { nom: s.commune, n: 0 };
+    vues[k].n++;
+  });
+  return Object.keys(vues).map(function (k) { return vues[k]; })
+    .sort(function (a, b) { return b.n - a.n || a.nom.localeCompare(b.nom); });
+}
+
+function barreBoutiques() {
+  if (cache.boutiques.length < SEUIL_RECHERCHE) return '';
+  const villes = villesDesBoutiques();
+  const chips = villes.length > 1
+    ? '<div class="chips">' +
+        [{ nom: t('allCities'), code: 'toutes', n: cache.boutiques.length }]
+          .concat(villes.map(function (v) {
+            return { nom: v.nom, code: v.nom, n: v.n };
+          }))
+          .map(function (g) {
+            return '<button class="chip" data-ville="' + esc(g.code) + '" ' +
+              'aria-pressed="' + (memeLieu(filtreB.commune, g.code) ||
+                 filtreB.commune === g.code) + '">' +
+              esc(g.nom) + '<span class="chipnum">' + g.n + '</span></button>';
+          }).join('') +
+      '</div>'
+    : '';
+  return '<div class="filtres">' +
+    '<input class="recherche" id="qBoutiques" type="search" ' +
+      'placeholder="' + esc(t('searchShop')) + '" value="' + esc(filtreB.q) + '">' +
+    chips +
+  '</div>';
+}
+
+// Ne réécrit QUE la liste : le champ de recherche garde son contenu, son
+// curseur et le clavier ouvert. Tout re-rendre le fermerait à chaque lettre.
+function rafraichirBoutiques() {
+  const z = el('shopList');
+  if (z) z.innerHTML = listeBoutiquesHtml();
+}
+
+async function rendreBoutiques() {
+  el('shopsTitle').textContent = t('shops');
+  el('shopsNote').textContent = t('shopsNote');
+  if (!cache.boutiques.length) {
+    try { const r = await API.boutiques(); cache.boutiques = r.data || []; } catch (e) {}
+  }
+  const lienVendre = '<a class="ghost" href="devenir-vendeur.html" ' +
+    'style="display:block;text-align:center;text-decoration:none;margin-top:6px">' +
+    esc(t('sellHere')) + '</a>';
+  el('shopBarre').innerHTML = barreBoutiques();
+  el('shopList').innerHTML = listeBoutiquesHtml();
+  el('shopVendre').innerHTML = lienVendre;
 }
 
 async function rendreBoutique() {
@@ -1289,6 +1374,12 @@ async function envoyerCommande() {
 
 /* ---------- Événements ----------------------------------- */
 
+document.addEventListener('input', function (ev) {
+  if (!ev.target || ev.target.id !== 'qBoutiques') return;
+  filtreB.q = ev.target.value || '';
+  rafraichirBoutiques();
+});
+
 document.addEventListener('click', function (ev) {
   // Un clic atterrit souvent sur l'icône ou le texte À L'INTÉRIEUR du
   // bouton, pas sur le bouton : on remonte au bouton avant de comparer
@@ -1325,6 +1416,16 @@ document.addEventListener('click', function (ev) {
     return;
   }
   if (cible.id === 'versInscription') { modeConnexion = false; rendreCompte(); return; }
+
+  const puce = cible.closest ? cible.closest('[data-ville]') : null;
+  if (puce) {
+    filtreB.commune = puce.getAttribute('data-ville');
+    // La barre se re-rend aussi : les pastilles doivent changer d'état.
+    const zb = el('shopBarre');
+    if (zb) zb.innerHTML = barreBoutiques();
+    rafraichirBoutiques();
+    return;
+  }
 
   if (cible.id === 'compteBtn') { aller('compte'); return; }
   if (cible.id === 'clocheBtn') { aller('messages'); return; }

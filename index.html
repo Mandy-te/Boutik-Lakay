@@ -270,6 +270,20 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
    la qu'on vous renverra votre mot de passe » fait remplir le champ,
    « adresse e-mail » ne fait rien. */
 .aide{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:var(--ink-soft)}
+/* Barre de recherche des boutiques. Volontairement NON collante, au
+   contraire de celle de l'administration : l'en-tete de la boutique est
+   deja sticky avec un z-index superieur, une seconde barre collee
+   passerait dessous et disparaitrait. Et sur un telephone, deux bandes
+   fixes mangent la moitie de l'ecran. */
+.filtres{padding:4px 0 10px}
+.recherche{width:100%;box-sizing:border-box;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);border-radius:12px;
+  padding:11px 13px;font:inherit;font-size:15px}
+.recherche:focus{outline:2px solid var(--brand);outline-offset:1px}
+.chips{display:flex;gap:7px;overflow-x:auto;padding-top:8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chipnum{font-variant-numeric:tabular-nums;opacity:.65;font-size:11.5px;
+  margin-left:5px}
 </style>
 </head>
 <body>
@@ -325,7 +339,9 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);
   <section id="view-shops" class="wrap" hidden>
     <div class="sechead"><h2 id="shopsTitle"></h2></div>
     <p class="note" id="shopsNote"></p>
+    <div id="shopBarre"></div>
     <div class="shoplist" id="shopList"></div>
+    <div id="shopVendre"></div>
   </section>
 
   <section id="view-shop" class="wrap" hidden>
