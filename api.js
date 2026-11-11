@@ -216,6 +216,39 @@ const API = (function () {
     return normaliserTel(tel) + '@' + DOMAINE_INTERNE;
   }
 
+  /* Supabase répond en anglais, et parfois en jargon. « Error sending
+     confirmation email » affiché tel quel à quelqu'un qui vend du savon
+     aux Gonaïves ne lui apprend rien, et surtout ne lui dit pas quoi
+     faire. On traduit les cas qu'on sait reconnaître, et on laisse
+     passer le reste plutôt que d'inventer. */
+  function messageClair(e) {
+    const m = String((e && e.message) || e || '').toLowerCase();
+    if (m.indexOf('already') !== -1 || m.indexOf('registered') !== -1) {
+      return 'Cette adresse e-mail a déjà un compte. Connectez-vous.';
+    }
+    if (m.indexOf('sending') !== -1 && m.indexOf('email') !== -1) {
+      return 'Le courriel de confirmation n’a pas pu partir. Ce n’est pas ' +
+        'votre faute : prévenez-nous au comptoir, on crée votre compte ' +
+        'avec vous.';
+    }
+    if (m.indexOf('rate limit') !== -1 || m.indexOf('too many') !== -1) {
+      return 'Trop de tentatives sur cette adresse. Attendez une heure, ' +
+        'ou appelez le comptoir.';
+    }
+    if (m.indexOf('signups not allowed') !== -1 ||
+        m.indexOf('signup is disabled') !== -1) {
+      return 'Les inscriptions sont momentanément fermées. Réessayez plus tard.';
+    }
+    if (m.indexOf('captcha') !== -1) {
+      return 'La vérification anti-robot a échoué. Rechargez la page et ' +
+        'réessayez.';
+    }
+    if (m.indexOf('invalid') !== -1 && m.indexOf('email') !== -1) {
+      return 'Cette adresse e-mail n’est pas acceptée. Vérifiez-la.';
+    }
+    return (e && e.message) ? e.message : 'Une erreur est survenue.';
+  }
+
   function normaliserEmail(mail) {
     return String(mail || '').trim().toLowerCase();
   }
@@ -345,12 +378,7 @@ const API = (function () {
       const { error } = await sb().auth.updateUser({
         email: ident, password: String(champs.pin)
       }, { captchaToken: jeton });
-      if (error) {
-        if (String(error.message).toLowerCase().indexOf('already') !== -1) {
-          throw new Error('Cette adresse e-mail a d\u00e9j\u00e0 un compte. Connectez-vous.');
-        }
-        throw error;
-      }
+      if (error) throw new Error(messageClair(error));
       // Si la confirmation d'e-mail est restée active côté Supabase, le
       // changement reste en attente et le compte demeure de passage.
       const { data: apres } = await sb().auth.getUser();
@@ -370,12 +398,7 @@ const API = (function () {
         emailRedirectTo: pageDuSite(champs.retour || 'compte-confirme.html')
       }
     });
-    if (error) {
-      if (String(error.message).toLowerCase().indexOf('already') !== -1) {
-        throw new Error('Cette adresse e-mail a déjà un compte. Connectez-vous.');
-      }
-      throw error;
-    }
+    if (error) throw new Error(messageClair(error));
 
     /* Pas de session = « Confirm email » est actif, et c'est voulu : le
        compte existe, le profil aussi — le trigger vient de le poser à
@@ -799,7 +822,7 @@ const API = (function () {
     normaliserTel: normaliserTel, telValide: telValide, estInvite: estInvite,
     identifiantInterne: identifiantInterne,
     normaliserEmail: normaliserEmail, emailValide: emailValide,
-    forceMotDePasse: forceMotDePasse,
+    forceMotDePasse: forceMotDePasse, messageClair: messageClair,
     creerCompte: creerCompte, connecter: connecter, deconnecter: deconnecter,
     demanderReinitialisation: demanderReinitialisation,
     renvoyerConfirmation: renvoyerConfirmation,

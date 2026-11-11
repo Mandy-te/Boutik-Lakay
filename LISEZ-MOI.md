@@ -61,6 +61,30 @@ marche pas. Sans ce bloc, personne ne le saurait.
 **Les deux modèles de courriel** sont dans `courriels/` : `confirmation.html`
 pour « Confirm signup », `reinitialisation.html` pour « Reset Password ».
 
+#### Coller un modèle sans le casser
+
+Supabase analyse ces modèles avec `html/template` de Go, qui est strict.
+Un collage tronqué — facile au doigt sur un téléphone — donne cette erreur :
+
+```
+html/template: ... ends in a non-text context: {stateTag ...}
+```
+
+« Se termine dans un contexte non textuel » veut dire que le modèle s'arrête
+au milieu d'une balise ouverte. Et l'utilisateur, lui, voit seulement
+« Error sending confirmation email » : rien ne dit que la faute est dans un
+modèle.
+
+Les deux fichiers **commencent par `<table`** et **se terminent par
+`</table>`**. C'est la vérification à faire après chaque collage : si le
+champ ne se termine pas par `</table>`, le collage est incomplet.
+
+Et vide **complètement** le champ avant de coller. Un reste de l'ancien
+modèle anglais mélangé au nouveau produit exactement la même erreur.
+
+Les deux fichiers ne portent plus de commentaire d'explication en tête,
+exprès : ce qui est dans le fichier est ce qu'on colle, rien d'autre.
+
 ### 1 ter. Les deux réglages à corriger pour les mots de passe
 
 **Authentication → Policies → Minimum password length → passer de 6 à 8.**

@@ -1,22 +1,3 @@
-<!--
-  Konbit Market — courriel de réinitialisation du mot de passe
-
-  À COLLER dans Supabase : Authentication → Emails → « Reset Password ».
-  Le modèle par défaut est en anglais et dit « Reset Password » : illisible
-  pour la plupart des gens à qui on l'envoie. Celui-ci est en français, avec
-  le créole sous chaque phrase importante.
-
-  La seule variable utilisée est {{ .ConfirmationURL }}. Ne la renomme pas.
-
-  Pourquoi du HTML en tableaux et des styles en ligne : les clients de
-  messagerie ignorent les feuilles de style externes, et beaucoup ignorent
-  même <style> dans l'en-tête. Gmail sur Android supprime les polices
-  distantes. Donc rien d'externe, tout en ligne, polices système.
-
-  Le lien est répété en texte brut sous le bouton : sur un téléphone bas de
-  gamme ou dans un client qui bloque les boutons, c'est la seule façon de
-  s'en sortir.
--->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:#F6F5F2;margin:0;padding:24px 12px;">
   <tr>
