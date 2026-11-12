@@ -17,7 +17,7 @@
 // À incrémenter à chaque mise en ligne : c'est ce numéro qui purge
 // l'ancien cache. Sans ça, un correctif reste invisible sur les
 // téléphones qui ont déjà ouvert l'app une fois.
-const VERSION = 'km-v6.1.1';
+const VERSION = 'km-v6.2.0';
 
 const SQUELETTE = [
   './',

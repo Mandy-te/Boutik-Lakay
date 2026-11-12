@@ -41,6 +41,16 @@
     </div></div>
   </section>
 
+  <section id="vue-connecte" class="wrap" hidden>
+    <div class="sechead"><h2>Votre compte est confirmé</h2></div>
+    <div class="pile"><div class="bloc">
+      <p class="note">Votre adresse est vérifiée. Connectez-vous pour
+        commander.</p>
+      <a class="cta" href="index.html"
+         style="display:block;text-align:center;text-decoration:none">Me connecter</a>
+    </div></div>
+  </section>
+
   <section id="vue-mort" class="wrap" hidden>
     <div class="sechead"><h2>Ce lien ne vaut plus</h2></div>
     <div class="pile"><div class="bloc">
@@ -80,7 +90,7 @@
   var el = function (i) { return document.getElementById(i); };
 
   function montrer(vue) {
-    ['attente', 'ok', 'mort'].forEach(function (v) {
+    ['attente', 'ok', 'connecte', 'mort'].forEach(function (v) {
       var e = el('vue-' + v);
       if (e) e.hidden = (v !== vue);
     });
@@ -97,8 +107,23 @@
     return false;
   }
 
+  /* Le # porte le résultat de la vérification. On le lit avant que
+     supabase-js le consomme : c'est lui qui dit si le lien a servi. */
+  var marque = String(location.hash || '') + String(location.search || '');
+  var confirmee = marque.indexOf('type=signup') !== -1 ||
+                  marque.indexOf('type=email_change') !== -1;
+  var refus = marque.indexOf('error') !== -1 ||
+              marque.indexOf('expired') !== -1;
+
   attendreSession().then(async function (ok) {
-    if (!ok) { montrer('mort'); return; }
+    if (!ok) {
+      /* Pas de session ne veut pas forcément dire lien mort : selon le
+         réglage du projet, Supabase peut confirmer l'adresse sans ouvrir
+         de session. Annoncer « lien expiré » à quelqu'un dont le compte
+         vient d'être validé serait faux, et il recommencerait tout. */
+      montrer(confirmee && !refus ? 'connecte' : 'mort');
+      return;
+    }
     /* Un membre de l'équipe qui confirme son adresse n'a rien à faire sur
        la boutique : on l'envoie directement à son espace. */
     var role = await API.monRole().catch(function () { return null; });

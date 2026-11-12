@@ -75,6 +75,9 @@ const T = {
     pinHint:'Au moins 8 caract\u00e8res, avec des lettres.',
     emailHint:'C\u2019est par l\u00e0 qu\u2019on vous renverra votre mot de passe si vous l\u2019oubliez.',
     forgot:'Mot de passe oubli\u00e9 ?',
+    confirmedOk:'Votre compte est confirm\u00e9.',
+    confirmedIn:'Vous \u00eates connect\u00e9. Bonne visite.',
+    confirmedOut:'Connectez-vous pour commander.',
     checkInbox:'V\u00e9rifiez votre bo\u00eete mail',
     checkInboxWhy:'Nous venons d\u2019envoyer un lien \u00e0 cette adresse. Ouvrez-le pour activer votre compte \u2014 sans \u00e7a, vous ne pourrez pas commander.',
     checkInboxSpam:'Rien au bout de deux minutes ? Regardez dans vos ind\u00e9sirables. Et v\u00e9rifiez que l\u2019adresse est la bonne.',
@@ -173,6 +176,9 @@ const T = {
     pinHint:'Omwen 8 karakt\u00e8, ak l\u00e8t ladan l.',
     emailHint:'Se la n ap voye mo de pas ou si w bliye l.',
     forgot:'Ou bliye mo de pas ou ?',
+    confirmedOk:'Kont ou konfime.',
+    confirmedIn:'Ou konekte. Bon vizit.',
+    confirmedOut:'Konekte pou w ka komande.',
     checkInbox:'Al gade bwat im\u00e8l ou',
     checkInboxWhy:'Nou fenk voye yon lyen nan adr\u00e8s sa a. Louvri l pou aktive kont ou \u2014 san sa, ou p ap ka komande.',
     checkInboxSpam:'Anyen apre de minit ? Gade nan sa yo rele endezirab yo. Epi tcheke si adr\u00e8s la bon.',
@@ -231,6 +237,28 @@ let envoiEnCours = false;
 let invite = true;        // session de passage tant qu'aucun compte n'est cree
 let roleCourant = null;   // 'acheteur', 'vendeur', 'agent' ou 'admin'
 let attenteConfirmation = null;   // adresse en attente de confirmation
+let venantDeConfirmer = false;    // on arrive d'un lien de confirmation
+
+/* Retour d'un lien envoyé par courriel.
+
+   Supabase renvoie avec les jetons dans le #, et un « type » qui dit
+   pourquoi : signup pour une adresse confirmée, recovery pour un mot de
+   passe. Il faut le lire AVANT que supabase-js consomme le # à sa
+   première initialisation, sinon il n'y a plus rien à lire.
+
+   Pourquoi lire ça sur l'accueil alors qu'une page dédiée existe : quand
+   l'adresse de retour demandée n'est pas dans la liste blanche de
+   Supabase, il abandonne le chemin et renvoie à la racine du Site URL.
+   La personne atterrit alors sur l'accueil sans aucune explication, en
+   croyant que rien n'a marché. Mieux vaut savoir l'accueillir que
+   dépendre d'un réglage qu'un domaine oublié suffit à mettre en défaut. */
+function typeRetourCourriel() {
+  const h = String(location.hash || '');
+  if (h.indexOf('type=recovery') !== -1) return 'recovery';
+  if (h.indexOf('type=signup') !== -1) return 'signup';
+  if (h.indexOf('type=email_change') !== -1) return 'signup';
+  return null;
+}
 let modeConnexion = false; // le panier montre le formulaire de connexion
 
 /* ---------- Utilitaires ----------------------------------- */
@@ -958,6 +986,20 @@ async function rendreCompte() {
      prouvée. On ne renvoie donc pas la personne au formulaire : elle
      croirait que son inscription a échoué et recommencerait, pour se
      heurter à « cette adresse a déjà un compte ». */
+  if (venantDeConfirmer) {
+    const dedans = !invite;
+    z.innerHTML =
+      '<div class="bloc">' +
+        '<h3 style="margin:0 0 6px">' + esc(t('confirmedOk')) + '</h3>' +
+        '<p class="note" style="padding:0">' +
+          esc(t(dedans ? 'confirmedIn' : 'confirmedOut')) + '</p>' +
+      '</div>' +
+      (dedans
+        ? '<button class="cta" id="versAccueil">' + esc(t('shops')) + '</button>'
+        : '<button class="cta" id="versConnexion">' + esc(t('signIn')) + '</button>');
+    return;
+  }
+
   if (attenteConfirmation) {
     z.innerHTML =
       '<div class="bloc">' +
@@ -1399,7 +1441,12 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'orderBtn') { envoyerCommande(); return; }
 
   if (cible.id === 'versConnexion') {
-    attenteConfirmation = null; modeConnexion = true; rendreCompte(); return;
+    attenteConfirmation = null; venantDeConfirmer = false;
+    modeConnexion = true; rendreCompte(); return;
+  }
+
+  if (cible.id === 'versAccueil') {
+    venantDeConfirmer = false; aller('shops'); return;
   }
 
   if (cible.id === 'renvoyerLien') {
@@ -1704,6 +1751,15 @@ async function assurerLib() {
 }
 
 (async function demarrer() {
+  // Avant tout le reste : supabase-js vide le # dès qu'il s'initialise.
+  const retour = typeRetourCourriel();
+  if (retour === 'recovery') {
+    // Le choix d'un nouveau mot de passe a sa propre page ; on lui passe
+    // le # tel quel, c'est lui qui porte le jeton.
+    location.replace('nouveau-mot-de-passe.html' + location.hash);
+    return;
+  }
+
   majCompteur();
   appliquerLangue();
 
@@ -1720,6 +1776,15 @@ async function assurerLib() {
   await chargerCatalogue();
   appliquerLangue();
   compterNonLus();
+
+  if (retour === 'signup') {
+    venantDeConfirmer = true;
+    // Le # a fait son travail : on le retire pour qu'un rechargement ne
+    // rejoue pas le message, et pour ne pas laisser traîner un jeton
+    // dans la barre d'adresse.
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    aller('compte');
+  }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
   }
