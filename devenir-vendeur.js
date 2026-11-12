@@ -73,9 +73,15 @@ function montrer(vue) {
 /* ---------- Création du compte et de la boutique ---------- */
 
 async function creerTout() {
-  const nom = val('vNom');
+  // Deux champs à la saisie, un seul en base : « Prénom Nom ».
+  const prenom = val('vPrenom'), famille = val('vNom');
+  const nom = (prenom + ' ' + famille).trim().replace(/\s+/g, ' ');
+  if (!prenom || !famille) throw new Error('Indiquez votre prénom et votre nom.');
   const tel = val('vTel');
   const pin = val('vPin');
+  if (pin !== val('vPin2')) {
+    throw new Error('Les deux mots de passe ne sont pas identiques.');
+  }
   const mail = val('vMail');
   const boutique = val('vBoutique');
   const departement = val('vDep');

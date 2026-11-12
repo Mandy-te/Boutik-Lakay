@@ -35,10 +35,18 @@
     <div class="pile">
       <div class="bloc">
         <div class="champ"><label for="mdp">Mot de passe</label>
-          <input id="mdp" type="password" autocomplete="new-password">
+          <div class="mdpbloc">
+            <input id="mdp" type="password" autocomplete="new-password">
+            <button type="button" class="voirmdp" data-voir="mdp"
+                    aria-label="Voir le mot de passe">Voir</button>
+          </div>
           <span class="aide">Au moins 8 caractères, avec des lettres.</span></div>
         <div class="champ"><label for="mdp2">Répétez-le</label>
-          <input id="mdp2" type="password" autocomplete="new-password"></div>
+          <div class="mdpbloc">
+            <input id="mdp2" type="password" autocomplete="new-password">
+            <button type="button" class="voirmdp" data-voir="mdp2"
+                    aria-label="Voir le mot de passe">Voir</button>
+          </div></div>
         <div id="err"></div>
         <button class="cta" id="valider">Enregistrer</button>
       </div>
@@ -145,7 +153,16 @@
   }
 
   document.addEventListener('click', function (ev) {
-    if (ev.target.id === 'valider') valider();
+    if (ev.target.id === 'valider') { valider(); return; }
+    var b = ev.target.closest ? ev.target.closest('[data-voir]') : null;
+    if (!b) return;
+    var champ = el(b.getAttribute('data-voir'));
+    if (!champ) return;
+    var cache = champ.type === 'password';
+    champ.type = cache ? 'text' : 'password';
+    b.textContent = cache ? 'Cacher' : 'Voir';
+    b.setAttribute('aria-label', (cache ? 'Cacher' : 'Voir') + ' le mot de passe');
+    champ.focus();
   });
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' && (ev.target.id === 'mdp' || ev.target.id === 'mdp2')) valider();

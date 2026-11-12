@@ -249,6 +249,40 @@ en a trente sera bloqué et viendra se plaindre avant que tu aies eu le temps
 de le faire monter. Soit tu surveilles les nouvelles boutiques de près, soit
 tu relèves `max_references` sur `gratuit` en base.
 
+### Prénom et nom : deux champs, un seul stockage
+
+Le formulaire demande le prénom et le nom séparément — c'est plus clair, et
+ça empêche les inscriptions à « Mirèy » tout court, impossibles à vérifier au
+comptoir contre une pièce d'identité. Mais la base ne garde **qu'un seul
+champ**, `profiles.nom`, qui vaut « Prénom Nom ».
+
+Pourquoi ne pas avoir séparé aussi en base : 28 endroits du code lisent
+`.nom`, mêlant profils, produits, plans et points de retrait. Scinder la
+colonne obligeait à les reprendre un par un, avec à la clé des écrans où
+l'acheteur s'appellerait soudain « Joseph » au lieu de « Mirèy Joseph ». Le
+gain — pouvoir trier par nom de famille — ne valait pas ce risque pour un
+pilote.
+
+Si le besoin vient un jour (impression de reçus, tri alphabétique), c'est une
+migration à faire exprès : ajouter `prenom`, découper l'existant, et reprendre
+les affichages. Pas un bricolage au passage.
+
+### Le bouton « Voir » des mots de passe
+
+Présent sur tous les champs de mot de passe du site, repéré par `data-voir`.
+Un seul gestionnaire par contexte : `app.js` pour la boutique, `equipe.js`
+pour les cinq écrans hors boutique, et un troisième dans
+`nouveau-mot-de-passe.html`, qui ne charge ni l'un ni l'autre.
+
+Taper huit caractères à l'aveugle sur un clavier de téléphone est la
+première cause d'échec de connexion, et la deuxième est de croire qu'on s'est
+trompé alors que non. Le champ reste masqué par défaut : c'est la personne
+qui décide, pas nous.
+
+Le `padding-right` de `.mdpbloc input` n'est pas décoratif — il réserve la
+place du bouton. Sans lui, le texte démasqué passe dessous et devient
+illisible, ce qui annule tout l'intérêt.
+
 ### La recherche de boutiques apparaît toute seule
 
 Côté acheteur, l'onglet Boutiques n'affiche sa barre de recherche qu'à partir

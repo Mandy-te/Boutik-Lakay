@@ -75,6 +75,11 @@ const T = {
     pinHint:'Au moins 8 caract\u00e8res, avec des lettres.',
     emailHint:'C\u2019est par l\u00e0 qu\u2019on vous renverra votre mot de passe si vous l\u2019oubliez.',
     forgot:'Mot de passe oubli\u00e9 ?',
+    firstName:'Pr\u00e9nom', lastName:'Nom',
+    pin2:'R\u00e9p\u00e9tez le mot de passe',
+    showPwd:'Voir', hidePwd:'Cacher',
+    pwdMismatch:'Les deux mots de passe ne sont pas identiques.',
+    needBothNames:'Indiquez votre pr\u00e9nom et votre nom.',
     confirmedOk:'Votre compte est confirm\u00e9.',
     confirmedIn:'Vous \u00eates connect\u00e9. Bonne visite.',
     confirmedOut:'Connectez-vous pour commander.',
@@ -176,6 +181,11 @@ const T = {
     pinHint:'Omwen 8 karakt\u00e8, ak l\u00e8t ladan l.',
     emailHint:'Se la n ap voye mo de pas ou si w bliye l.',
     forgot:'Ou bliye mo de pas ou ?',
+    firstName:'Non', lastName:'Siyati',
+    pin2:'Repete mo de pas la',
+    showPwd:'Montre', hidePwd:'Kache',
+    pwdMismatch:'De mo de pas yo pa menm.',
+    needBothNames:'Mete non ak siyati ou.',
     confirmedOk:'Kont ou konfime.',
     confirmedIn:'Ou konekte. Bon vizit.',
     confirmedOut:'Konekte pou w ka komande.',
@@ -976,6 +986,27 @@ function champsLieu(dep, com, prefixe) {
       '</label><select id="' + prefixe + 'Com">' + optionsCommunes(dep, com) + '</select></div>';
 }
 
+/* Un champ de mot de passe avec son bouton « Voir ».
+
+   Sur un téléphone, taper huit caractères à l'aveugle avec un doigt qui
+   dérape est la première cause d'abandon d'une inscription — et la
+   deuxième, c'est de croire qu'on s'est trompé alors que non. Pouvoir
+   relire ce qu'on tape vaut mieux, ici, que la protection contre un
+   voisin qui regarde par-dessus l'épaule : le champ reste masqué par
+   défaut, et c'est la personne qui décide.
+
+   Un seul gestionnaire sert tous les champs, repéré par data-voir. */
+function champMdp(id, etiquette, aide, autoc) {
+  return '<div class="champ"><label for="' + id + '">' + esc(etiquette) + '</label>' +
+    '<div class="mdpbloc">' +
+      '<input id="' + id + '" type="password" autocomplete="' + autoc + '">' +
+      '<button type="button" class="voirmdp" data-voir="' + id + '" ' +
+        'aria-label="' + esc(t('showPwd')) + '">' + esc(t('showPwd')) + '</button>' +
+    '</div>' +
+    (aide ? '<span class="aide">' + esc(aide) + '</span>' : '') +
+  '</div>';
+}
+
 async function rendreCompte() {
   invite = await API.estInvite().catch(function () { return true; });
   const prof = invite ? null : await API.profil().catch(function () { return null; });
@@ -1019,8 +1050,7 @@ async function rendreCompte() {
       '<div class="shoplist">' +
         '<div class="champ"><label for="lTel">' + esc(t('loginId')) + '</label>' +
           '<input id="lTel" type="text" autocomplete="username"></div>' +
-        '<div class="champ"><label for="lPin">' + esc(t('pin')) + '</label>' +
-          '<input id="lPin" type="password" autocomplete="current-password"></div>' +
+        champMdp('lPin', t('pin'), '', 'current-password') +
       '</div>' +
       '<div id="compteErr"></div>' +
       '<button class="cta" id="seConnecter">' + esc(t('signIn')) + '</button>' +
@@ -1034,16 +1064,17 @@ async function rendreCompte() {
     z.innerHTML =
       '<p class="note" style="padding-top:0">' + esc(t('whyAccount')) + '</p>' +
       '<div class="shoplist">' +
-        '<div class="champ"><label for="cNom">' + esc(t('yourName')) + '</label>' +
-          '<input id="cNom" autocomplete="name"></div>' +
+        '<div class="champ"><label for="cPrenom">' + esc(t('firstName')) + '</label>' +
+          '<input id="cPrenom" autocomplete="given-name"></div>' +
+        '<div class="champ"><label for="cNom">' + esc(t('lastName')) + '</label>' +
+          '<input id="cNom" autocomplete="family-name"></div>' +
         '<div class="champ"><label for="cTel">' + esc(t('yourPhone')) + '</label>' +
           '<input id="cTel" type="tel" inputmode="tel" autocomplete="username"></div>' +
         '<div class="champ"><label for="cMail">' + esc(t('yourEmail')) + '</label>' +
           '<input id="cMail" type="email" inputmode="email" autocomplete="email">' +
           '<span class="aide">' + esc(t('emailHint')) + '</span></div>' +
-        '<div class="champ"><label for="cPin">' + esc(t('pin')) + '</label>' +
-          '<input id="cPin" type="password" autocomplete="new-password">' +
-          '<span class="aide">' + esc(t('pinHint')) + '</span></div>' +
+        champMdp('cPin', t('pin'), t('pinHint'), 'new-password') +
+        champMdp('cPin2', t('pin2'), '', 'new-password') +
         champsLieu(null, null, 'c') +
       '</div>' +
       '<label class="accord"><input type="checkbox" id="cAccord"><span>' +
@@ -1445,6 +1476,19 @@ document.addEventListener('click', function (ev) {
     modeConnexion = true; rendreCompte(); return;
   }
 
+  const oeil = cible.closest ? cible.closest('[data-voir]') : null;
+  if (oeil) {
+    const champ = el(oeil.getAttribute('data-voir'));
+    if (champ) {
+      const cache = champ.type === 'password';
+      champ.type = cache ? 'text' : 'password';
+      oeil.textContent = t(cache ? 'hidePwd' : 'showPwd');
+      oeil.setAttribute('aria-label', t(cache ? 'hidePwd' : 'showPwd'));
+      champ.focus();
+    }
+    return;
+  }
+
   if (cible.id === 'versAccueil') {
     venantDeConfirmer = false; aller('shops'); return;
   }
@@ -1478,11 +1522,22 @@ document.addEventListener('click', function (ev) {
   if (cible.id === 'clocheBtn') { aller('messages'); return; }
 
   if (cible.id === 'creerCompte') {
-    const nom = val2('cNom'), tel = val2('cTel'), pin = val2('cPin');
+    const prenom = val2('cPrenom'), famille = val2('cNom');
+    // Un seul champ en base : « Prénom Nom », tel qu'on appelle les gens.
+    const nom = (prenom + ' ' + famille).trim().replace(/\s+/g, ' ');
+    const tel = val2('cTel'), pin = val2('cPin'), pin2 = val2('cPin2');
     const dep = val2('cDep'), com = val2('cCom'), mail = val2('cMail');
     const z = el('compteErr');
-    if (!nom || !API.telValide(tel)) {
-      z.innerHTML = '<div class="erreur">' + esc(API.telValide(tel) ? t('needName') : t('needTel')) + '</div>';
+    if (!prenom || !famille) {
+      z.innerHTML = '<div class="erreur">' + esc(t('needBothNames')) + '</div>';
+      return;
+    }
+    if (!API.telValide(tel)) {
+      z.innerHTML = '<div class="erreur">' + esc(t('needTel')) + '</div>';
+      return;
+    }
+    if (pin !== pin2) {
+      z.innerHTML = '<div class="erreur">' + esc(t('pwdMismatch')) + '</div>';
       return;
     }
     if (!API.emailValide(mail)) {

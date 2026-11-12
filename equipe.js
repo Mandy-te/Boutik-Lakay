@@ -246,3 +246,26 @@ const EQUIPE = (function () {
 })();
 
 window.EQUIPE = EQUIPE;
+
+
+/* Bouton « Voir » des champs de mot de passe.
+
+   Posé ici parce qu'equipe.js est chargé par les cinq écrans qui ont un
+   mot de passe hors boutique : vendeur, gestion, agent, administration
+   et l'inscription vendeur. Un seul gestionnaire, repéré par data-voir,
+   plutôt que cinq copies qui divergeront.
+
+   Pourquoi offrir de démasquer : taper huit caractères à l'aveugle sur
+   un téléphone est la première cause d'échec de connexion. Le champ
+   reste masqué par défaut — c'est la personne qui décide, pas nous. */
+document.addEventListener('click', function (ev) {
+  const b = ev.target.closest ? ev.target.closest('[data-voir]') : null;
+  if (!b) return;
+  const champ = document.getElementById(b.getAttribute('data-voir'));
+  if (!champ) return;
+  const cache = champ.type === 'password';
+  champ.type = cache ? 'text' : 'password';
+  b.textContent = cache ? 'Cacher' : 'Voir';
+  b.setAttribute('aria-label', (cache ? 'Cacher' : 'Voir') + ' le mot de passe');
+  champ.focus();
+});

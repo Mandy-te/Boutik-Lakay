@@ -48,8 +48,10 @@
 
       <div class="bloc">
         <div class="titreligne"><h2>Vous</h2></div>
-        <div class="champ"><label for="vNom">Votre nom</label>
-          <input id="vNom" autocomplete="name" placeholder="Mirèy Joseph"></div>
+        <div class="champ"><label for="vPrenom">Prénom</label>
+          <input id="vPrenom" autocomplete="given-name" placeholder="Mirèy"></div>
+        <div class="champ"><label for="vNom">Nom</label>
+          <input id="vNom" autocomplete="family-name" placeholder="Joseph"></div>
         <div class="champ"><label for="vTel">Téléphone</label>
           <input id="vTel" type="tel" inputmode="tel" autocomplete="username"
                  placeholder="3132 4336"></div>
@@ -58,8 +60,18 @@
           <span class="aide">C’est par là qu’on vous renverra votre mot de passe
             si vous l’oubliez.</span></div>
         <div class="champ"><label for="vPin">Mot de passe</label>
-          <input id="vPin" type="password" autocomplete="new-password">
+          <div class="mdpbloc">
+            <input id="vPin" type="password" autocomplete="new-password">
+            <button type="button" class="voirmdp" data-voir="vPin"
+                    aria-label="Voir le mot de passe">Voir</button>
+          </div>
           <span class="aide">Au moins 8 caractères, avec des lettres.</span></div>
+        <div class="champ"><label for="vPin2">Répétez le mot de passe</label>
+          <div class="mdpbloc">
+            <input id="vPin2" type="password" autocomplete="new-password">
+            <button type="button" class="voirmdp" data-voir="vPin2"
+                    aria-label="Voir le mot de passe">Voir</button>
+          </div></div>
         <p class="note">Vous reviendrez avec votre numéro ou votre adresse,
           au choix, depuis n’importe quel téléphone.</p>
       </div>
